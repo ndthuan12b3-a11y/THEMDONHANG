@@ -7,10 +7,14 @@ import fetch from 'node-fetch';
 import webpush from 'web-push';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json' assert { type: 'json' };
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Import firebase config manually to avoid ESM JSON import syntax errors on some environments
+const firebaseConfigPath = path.resolve(__dirname, '../firebase-applet-config.json');
+const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
 
 // --- Web Push Setup ---
 // On serverless environments like Vercel, fs.writeFileSync fails and memory resets.
