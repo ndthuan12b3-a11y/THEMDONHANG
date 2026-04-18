@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: notes
+    // Document ID: auto-generated
+    // Fields:
+    //   - imageUrl: string (required, URL)
+    //   - content: string (required, max 5000 chars)
+    //   - timestamp: timestamp (required)
+    //   - userId: string (required, matches auth.uid)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidOrder(data) {
+      return (data.keys().hasAll(['imageUrls', 'orderName', 'senderName', 'pharmacy', 'hasRecordedEntry', 'hasRecordedBatchInfo', 'note', 'timestamp']) || 
+              data.keys().hasAll(['imageUrl', 'orderName', 'senderName', 'pharmacy', 'hasRecordedEntry', 'hasRecordedBatchInfo', 'note', 'timestamp'])) &&
+             data.orderName is string && data.orderName.size() < 500 &&
+             data.senderName is string && data.senderName.size() < 200 &&
+             data.pharmacy in ['Hưng Thịnh', 'Tuệ Thiện', 'Phúc An'] &&
+             data.hasRecordedEntry is bool &&
+             data.hasRecordedBatchInfo is bool &&
+             data.note is string && data.note.size() < 2000 &&
+             (data.timestamp is timestamp || data.timestamp == null);
+    }
+
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /push_subscriptions/{subId} {
+      allow read, write: if true;
+    }
+  }
+}

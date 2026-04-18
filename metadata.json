@@ -1,0 +1,6 @@
+{
+  "name": "Order Photo Tracker",
+  "description": "Ứng dụng theo dõi ảnh chụp đơn hàng nội bộ, giúp quản lý tên đơn hàng và người gửi một cách trực quan.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": []
+}

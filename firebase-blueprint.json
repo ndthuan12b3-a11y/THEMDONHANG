@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "An order photo entry",
+      "type": "object",
+      "properties": {
+        "imageUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "URLs of the order photos"
+        },
+        "orderName": {
+          "type": "string",
+          "description": "Name of the order"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Name of the person who sent/uploaded the order"
+        },
+        "pharmacy": {
+          "type": "string",
+          "enum": ["Hưng Thịnh", "Tuệ Thiện", "Phúc An"],
+          "description": "The pharmacy associated with the order"
+        },
+        "hasRecordedEntry": {
+          "type": "boolean",
+          "description": "Step 1: Recorded in entry book"
+        },
+        "hasRecordedBatchInfo": {
+          "type": "boolean",
+          "description": "Step 2: Recorded batch number and expiry date"
+        },
+        "note": {
+          "type": "string",
+          "description": "Additional notes for the order photo"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the order was recorded"
+        }
+      },
+      "required": ["imageUrls", "orderName", "senderName", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of order photos"
+    }
+  }
+}

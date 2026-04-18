@@ -1,0 +1,24 @@
+{
+  "name": "Quản lý đơn hàng Hưng Thịnh & 108",
+  "short_name": "QL Đơn",
+  "description": "Hệ thống quản lý ảnh chụp đơn hàng cho nhà thuốc",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/med/192/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://picsum.photos/seed/med/512/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "orientation": "portrait"
+}
