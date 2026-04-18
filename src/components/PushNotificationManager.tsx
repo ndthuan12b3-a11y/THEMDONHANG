@@ -194,20 +194,28 @@ export function PushNotificationManager() {
   if (!isSupported) {
     if (isIOS && !isStandalone) {
       return (
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="bg-amber-50 border-amber-200 text-amber-700"
-          onClick={() => {
-            toast.info("Để bật thông báo trên iPhone:", {
-              description: "1. Nhấn nút 'Chia sẻ' (hình vuông mũi tên lên)\n2. Chọn 'Thêm vào MH chính' (Add to Home Screen)\n3. Mở ứng dụng từ màn hình chính và bật thông báo.",
-              duration: 10000
-            });
-          }}
-        >
-          <Zap className="h-4 w-4 mr-2 animate-pulse" />
-          iPhone: Xem cách bật thông báo
-        </Button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex flex-col items-center sm:items-start text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
+            <p className="font-semibold flex items-center gap-1">
+              <Zap className="h-3 w-3 animate-pulse" />
+              iPhone: Để bật thông báo
+            </p>
+            <p className="opacity-80">Nhấn nút "Chia sẻ" {'>'} "Thêm vào MH chính" {'>'} Mở App</p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200"
+            onClick={() => {
+              toast.info("Để bật thông báo trên iPhone:", {
+                description: "1. Nhấn nút 'Chia sẻ' (hình vuông mũi tên lên)\n2. Chọn 'Thêm vào MH chính' (Add to Home Screen)\n3. Mở ứng dụng từ màn hình chính và bật thông báo.",
+                duration: 10000
+              });
+            }}
+          >
+            Xem hướng dẫn
+          </Button>
+        </div>
       );
     }
 

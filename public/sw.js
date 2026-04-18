@@ -56,7 +56,7 @@ self.addEventListener('push', function(event) {
     const data = event.data.json();
     const notification = data.notification || {};
     
-    // Giao diện (Design) của Thông báo
+    // Giao diện (Design) của Thông báo chuyên nghiệp
     const options = {
       body: notification.body,
       icon: notification.icon || '/vite.svg',
