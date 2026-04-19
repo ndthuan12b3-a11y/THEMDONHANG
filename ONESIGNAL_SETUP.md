@@ -68,31 +68,45 @@ serve(async (req) => {
    - **Function:** Chọn `onesignal-push`.
 4. Nhấn **Confirm**.
 
-### Lựa chọn B: Cấu hình bằng mã SQL (SQL Editor)
-Nếu bạn muốn dùng mã SQL, hãy dán đoạn code sau vào **SQL Editor**:
+### Lựa chọn B: Cấu hình bằng mã SQL (SQL Editor) - PHƯƠNG PHÁP NHANH NHẤT
+Nếu bạn không muốn tạo Edge Function, hãy dán đoạn mã này vào **SQL Editor** của Supabase và nhấn **Run**. Nó sẽ giúp Database gửi thông báo thẳng tới OneSignal:
 
 ```sql
--- 1. Kích hoạt extension pg_net để cho phép gọi HTTP
+-- 1. Kích hoạt net extension (nếu chưa có)
 create extension if not exists pg_net;
 
--- 2. Tạo Function để gọi Edge Function
+-- 2. Xóa các bản cũ để làm mới hoàn toàn
+drop trigger if exists on_new_order_push on public.orders;
+drop function if exists public.send_onesignal_notification();
+
+-- 3. Tạo function gọi TRỰC TIẾP tới OneSignal API với mã của bạn
 create or replace function public.send_onesignal_notification()
 returns trigger as $$
 begin
   perform net.http_post(
-    url := 'https://' || current_setting('request.headers')::json->>'host' || '/functions/v1/onesignal-push',
+    url := 'https://onesignal.com/api/v1/notifications',
     headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('request.headers')::json->>'authorization'
+      'Content-Type', 'application/json; charset=utf-8',
+      'Authorization', 'Basic OGM2NzY3NzItMTZkYS00YWIwLWJlYjktNmY3ZDIyYTlmOTg0' -- REST API KEY đã mã hóa
     ),
-    body := jsonb_build_object('record', row_to_json(new))
+    body := jsonb_build_object(
+      'app_id', '25aa6235-0fb9-4faf-a2c5-aae18704c45a',
+      'included_segments', array['All'],
+      'contents', jsonb_build_object('vi', '📦 Đơn hàng mới: ' || new."orderName" || ' từ ' || new."senderName"),
+      'headings', jsonb_build_object('vi', 'THÔNG BÁO HỆ THỐNG'),
+      'priority', 10,
+      'android_visibility', 1,
+      'android_accent_color', 'FF10B981',
+      'data', jsonb_build_object('orderId', new.id)
+    )
   );
   return new;
+exception when others then
+  return new; -- Bảo vệ việc lưu đơn hàng
 end;
 $$ language plpgsql security definer;
 
--- 3. Tạo Trigger trên bảng orders
-drop trigger if exists on_new_order_push on public.orders;
+-- 4. Tạo trigger trên bảng orders
 create trigger on_new_order_push
   after insert on public.orders
   for each row execute function public.send_onesignal_notification();
