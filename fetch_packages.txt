@@ -1,0 +1,3 @@
+    "node_modules/@protobufjs/fetch": {
+      "resolved": "https://registry.npmjs.org/@protobufjs/fetch/-/fetch-1.1.0.tgz",
+        "@protobufjs/fetch": "^1.1.0",

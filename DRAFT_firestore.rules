@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    
+    function isValidOrder(data) {
+      return data.keys().hasAll(['imageUrls', 'orderName', 'senderName', 'pharmacy', 'hasRecordedEntry', 'hasRecordedBatchInfo', 'timestamp', 'status'])
+        && data.imageUrls is list
+        && data.imageUrls.size() >= 1
+        && data.imageUrls.size() <= 20
+        // check first image string constraint if any
+        && (data.imageUrls.size() == 0 || data.imageUrls[0] is string)
+        && data.orderName is string
+        && data.orderName.size() <= 200
+        && data.senderName is string
+        && data.senderName.size() <= 100
+        && data.pharmacy in ['Hưng Thịnh', 'Tuệ Thiện', 'Phúc An']
+        && data.hasRecordedEntry is bool
+        && data.hasRecordedBatchInfo is bool
+        && data.status in ['pending', 'completed']
+        && data.timestamp == request.time
+        // Optional note and imageUrl 
+        && (!('note' in data) || (data.note is string && data.note.size() <= 2000))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 2000));
+    }
+
+    function isValidPartialOrderUpdate(data, diffKeys) {
+      return (!diffKeys.hasAny(['orderName']) || (data.orderName is string && data.orderName.size() <= 200))
+        && (!diffKeys.hasAny(['senderName']) || (data.senderName is string && data.senderName.size() <= 100))
+        && (!diffKeys.hasAny(['pharmacy']) || data.pharmacy in ['Hưng Thịnh', 'Tuệ Thiện', 'Phúc An'])
+        && (!diffKeys.hasAny(['hasRecordedEntry']) || data.hasRecordedEntry is bool)
+        && (!diffKeys.hasAny(['hasRecordedBatchInfo']) || data.hasRecordedBatchInfo is bool)
+        && (!diffKeys.hasAny(['status']) || data.status in ['pending', 'completed'])
+        && (!diffKeys.hasAny(['note']) || (data.note is string && data.note.size() <= 2000))
+        // imageUrls updating?
+        && (!diffKeys.hasAny(['imageUrls']) || (data.imageUrls is list && data.imageUrls.size() <= 20))
+        && (!diffKeys.hasAny(['imageUrl']) || (data.imageUrl is string && data.imageUrl.size() <= 2000))
+        // Should not update timestamp
+        && (!diffKeys.hasAny(['timestamp']) || data.timestamp == existing().timestamp);
+    }
+
+    match /orders/{orderId} {
+      allow list, get: if isSignedIn() && isValidId(orderId);
+      
+      allow create: if isSignedIn() 
+        && isValidId(orderId) 
+        && isValidOrder(incoming())
+        // exact keys constraint: required 8 + up to 2 optional
+        && incoming().keys().size() >= 8 && incoming().keys().size() <= 10;
+        
+      allow update: if isSignedIn() 
+        && isValidId(orderId) 
+        && isValidPartialOrderUpdate(incoming(), incoming().diff(existing()).affectedKeys())
+        && (
+            (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['orderName', 'pharmacy', 'note'])) ||
+            (incoming().diff(existing()).affectedKeys().hasAny(['orderName', 'pharmacy', 'note', 'status']))
+        );
+
+      allow delete: if isSignedIn() && isValidId(orderId);
+    }
+  }
+}
