@@ -277,17 +277,98 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               variant="ghost" 
               size="sm" 
               className="h-7 sm:h-9 gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-red-500 hover:bg-red-50 hover:text-red-600 px-2 sm:px-4"
-              onClick={() => setIsDeleteConfirmOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDeleteConfirmOpen(true);
+              }}
               disabled={isDeleting}
             >
               <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden xs:inline">Xóa</span>
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-9 sm:w-9 text-zinc-400 hover:text-zinc-900" onClick={() => setIsEditing(true)}>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 sm:h-9 sm:w-9 text-zinc-400 hover:text-zinc-900" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditing(true);
+              }}
+            >
               <RotateCw className="h-3 w-3 sm:h-4 sm:w-4" /> 
             </Button>
           </div>
         </div>
+
+        {/* Dialogs for List View */}
+        <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+          <DialogContent className="w-[95%] max-w-[425px] rounded-2xl sm:rounded-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-center">Xác nhận xóa</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 text-sm text-zinc-500 text-center">
+              <div className="mx-auto w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              Bạn có chắc chắn muốn xóa đơn hàng <strong className="text-zinc-900 font-bold">{order.orderName}</strong>? Hành động này không thể hoàn tác.
+            </div>
+            <DialogFooter className="flex flex-row gap-2">
+              <Button variant="ghost" onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 rounded-xl h-11">Hủy</Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="flex-1 rounded-xl h-11 bg-red-600 hover:bg-red-700 font-bold">
+                {isDeleting ? "Đang xóa..." : "Xác nhận xóa"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isEditing} onOpenChange={setIsEditing}>
+          <DialogContent className="w-[95%] max-w-md rounded-2xl sm:rounded-3xl">
+            <DialogHeader>
+              <DialogTitle>Chỉnh sửa đơn hàng</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">TÊN NHÀ CUNG CẤP</label>
+                <Input 
+                  value={editOrderName}
+                  onChange={(e) => setEditOrderName(e.target.value)}
+                  className="rounded-xl h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nhà thuốc</label>
+                <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">
+                  {PHARMACIES.map(p => (
+                    <Button
+                      key={p.name}
+                      variant={editPharmacy === p.name ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        "flex-1 rounded-lg text-[10px] h-8 font-bold",
+                        editPharmacy === p.name ? "bg-white shadow-sm" : ""
+                      )}
+                      onClick={() => setEditPharmacy(p.name)}
+                    >
+                      {p.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ghi chú</label>
+                <Textarea 
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  className="rounded-xl min-h-[100px] resize-none"
+                />
+              </div>
+            </div>
+            <DialogFooter className="flex flex-row gap-2">
+              <Button variant="ghost" onClick={() => setIsEditing(false)} className="flex-1 rounded-xl h-11">Hủy</Button>
+              <Button onClick={handleUpdate} className="flex-1 rounded-xl h-11 bg-zinc-900 hover:bg-zinc-800 text-white font-bold">Cập nhật</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </motion.div>
     );
   }
@@ -393,9 +474,9 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
           {/* Delete Confirmation */}
           <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="w-[95%] sm:max-w-[425px] rounded-2xl sm:rounded-3xl">
               <DialogHeader>
-                <DialogTitle>Xác nhận xóa</DialogTitle>
+                <DialogTitle className="sm:text-left text-center">Xác nhận xóa</DialogTitle>
               </DialogHeader>
               <div className="py-4 text-sm text-zinc-500 text-center">
                 <div className="mx-auto w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
@@ -403,9 +484,9 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                 </div>
                 Bạn có chắc chắn muốn xóa đơn hàng <strong className="text-zinc-900 font-bold">{order.orderName}</strong>? Hành động này không thể hoàn tác.
               </div>
-              <DialogFooter className="flex gap-2 sm:justify-end">
-                <Button variant="ghost" onClick={() => setIsDeleteConfirmOpen(false)} className="rounded-xl">Hủy</Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="rounded-xl bg-red-600 hover:bg-red-700">
+              <DialogFooter className="flex flex-row gap-2 sm:justify-end">
+                <Button variant="ghost" onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 sm:flex-none rounded-xl h-10 sm:h-9">Hủy</Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="flex-1 sm:flex-none rounded-xl h-10 sm:h-9 bg-red-600 hover:bg-red-700 font-bold">
                   {isDeleting ? "Đang xóa..." : "Xác nhận xóa"}
                 </Button>
               </DialogFooter>
@@ -414,7 +495,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
           {/* Edit Dialog */}
           <Dialog open={isEditing} onOpenChange={setIsEditing}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-[95%] sm:max-w-md rounded-2xl sm:rounded-3xl">
               <DialogHeader>
                 <DialogTitle>Chỉnh sửa đơn hàng</DialogTitle>
               </DialogHeader>
@@ -424,7 +505,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                   <Input 
                     value={editOrderName}
                     onChange={(e) => setEditOrderName(e.target.value)}
-                    className="rounded-xl"
+                    className="rounded-xl h-11"
                   />
                 </div>
                 <div className="space-y-2">
@@ -436,7 +517,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                         variant={editPharmacy === p.name ? 'secondary' : 'ghost'}
                         size="sm"
                         className={cn(
-                          "flex-1 rounded-lg text-xs h-8",
+                          "flex-1 rounded-lg text-[10px] h-8 font-bold",
                           editPharmacy === p.name ? "bg-white shadow-sm" : ""
                         )}
                         onClick={() => setEditPharmacy(p.name)}
@@ -455,9 +536,9 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setIsEditing(false)} className="rounded-xl">Hủy</Button>
-                <Button onClick={handleUpdate} className="rounded-xl bg-zinc-900 hover:bg-zinc-800">Cập nhật</Button>
+              <DialogFooter className="flex flex-row gap-2 sm:justify-end">
+                <Button variant="ghost" onClick={() => setIsEditing(false)} className="flex-1 sm:flex-none rounded-xl h-10 sm:h-9">Hủy</Button>
+                <Button onClick={handleUpdate} className="flex-1 sm:flex-none rounded-xl h-10 sm:h-9 bg-zinc-900 hover:bg-zinc-800 text-white font-bold">Cập nhật</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
