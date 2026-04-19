@@ -76,7 +76,7 @@ const DynamicGalleryItem = React.memo(({ url, orderName, index }: { url: string;
   );
 });
 
-export const OrderCard = React.memo(({ order, viewMode }: OrderCardProps) => {
+export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardProps>(({ order, viewMode }, ref) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
@@ -211,6 +211,7 @@ export const OrderCard = React.memo(({ order, viewMode }: OrderCardProps) => {
   if (viewMode === 'list') {
     return (
       <motion.div
+        ref={ref}
         layout
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -293,6 +294,7 @@ export const OrderCard = React.memo(({ order, viewMode }: OrderCardProps) => {
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -463,10 +465,12 @@ export const OrderCard = React.memo(({ order, viewMode }: OrderCardProps) => {
       </Card>
     </motion.div>
   );
-}, (prev, next) => {
+}), (prev, next) => {
   return prev.order.id === next.order.id && 
          prev.order.status === next.order.status && 
          prev.viewMode === next.viewMode &&
          prev.order.timestamp === next.order.timestamp &&
          prev.order.orderName === next.order.orderName;
 });
+
+OrderCard.displayName = "OrderCard";

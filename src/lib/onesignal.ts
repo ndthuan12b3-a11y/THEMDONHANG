@@ -2,13 +2,21 @@ import OneSignal from 'react-onesignal';
 
 const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID;
 
+let isInitializing = false;
+let isAvailable = false;
+
+export const checkOneSignalAvailable = () => isAvailable;
+
 export const initOneSignal = async () => {
+  if (isInitializing || isAvailable) return;
+  
   if (!ONESIGNAL_APP_ID) {
     console.warn("OneSignal App ID is missing. Please set VITE_ONESIGNAL_APP_ID in the Secrets panel.");
     return;
   }
 
   try {
+    isInitializing = true;
     await OneSignal.init({
       appId: ONESIGNAL_APP_ID,
       allowLocalhostAsSecureOrigin: true,
@@ -42,8 +50,41 @@ export const initOneSignal = async () => {
     // Option to auto-prompt for permission on some browsers
     // await OneSignal.Slidedown.promptPush();
     
-    console.log("OneSignal Initialized successfully");
-  } catch (error) {
+    isAvailable = true;
+    console.log("OneSignal Initialized successfully", {
+      id: OneSignal.User.PushSubscription.id,
+      optedIn: OneSignal.User.PushSubscription.optedIn
+    });
+
+    // Tự động hiện gợi ý đăng ký nếu chưa đăng ký
+    if (!OneSignal.User.PushSubscription.optedIn) {
+      setTimeout(() => {
+        OneSignal.Slidedown.promptPush();
+      }, 3000); // Đợi 3 giây sau khi vào trang để không gây khó chịu
+    }
+
+    // Listen for subscription changes
+    OneSignal.User.PushSubscription.addEventListener("change", (event) => {
+      console.log("OneSignal Subscription Changed:", event.current);
+    });
+  } catch (error: any) {
+    isInitializing = false;
+    if (error?.message?.includes('already initialized')) {
+      console.log("OneSignal was already initialized");
+      return;
+    }
+    if (error?.message?.includes('Can only be used on')) {
+      const expectedDomain = error.message.match(/Can only be used on: (https?:\/\/[^\s]+)/)?.[1];
+      console.warn(
+        `OneSignal Domain Mismatch:
+        - Domain hiện tại: ${window.location.origin}
+        - Domain đăng ký: ${expectedDomain || 'Chưa rõ'}
+        
+        Thông báo đẩy sẽ KHÔNG hoạt động cho đến khi bạn cập nhập 'Site URL' trong OneSignal Dashboard 
+        để khớp với domain hiện tại (${window.location.origin}).`
+      );
+      return;
+    }
     console.error("Error initializing OneSignal:", error);
   }
 };
@@ -53,6 +94,14 @@ export const getOneSignalId = () => {
     return OneSignal.User.PushSubscription.id;
   } catch (e) {
     return null;
+  }
+};
+
+export const isSubscribedToOneSignal = () => {
+  try {
+    return OneSignal.User.PushSubscription.optedIn || false;
+  } catch (e) {
+    return false;
   }
 };
 

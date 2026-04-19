@@ -57,15 +57,58 @@ serve(async (req) => {
 ## Bước 2: Thiết lập Database Webhook
 Để mỗi khi có đơn hàng mới (INSERT), Supabase sẽ tự động gọi tới Edge Function ở trên.
 
+### Lựa chọn A: Cấu hình trên Giao diện (Khuyên dùng)
 1. Truy cập **Supabase Dashboard** -> **Database** -> **Webhooks**.
 2. Nhấn **Enable Webhooks** (nếu chưa bật).
 3. Tạo Webhook mới:
    - **Name:** `onesignal_trigger`
-   - **Table:** `orders`
+   - **Table:** `public.orders`
    - **Events:** Tích chọn `INSERT`.
    - **Type:** `Supabase Edge Functions`.
    - **Function:** Chọn `onesignal-push`.
 4. Nhấn **Confirm**.
 
+### Lựa chọn B: Cấu hình bằng mã SQL (SQL Editor)
+Nếu bạn muốn dùng mã SQL, hãy dán đoạn code sau vào **SQL Editor**:
+
+```sql
+-- 1. Kích hoạt extension pg_net để cho phép gọi HTTP
+create extension if not exists pg_net;
+
+-- 2. Tạo Function để gọi Edge Function
+create or replace function public.send_onesignal_notification()
+returns trigger as $$
+begin
+  perform net.http_post(
+    url := 'https://' || current_setting('request.headers')::json->>'host' || '/functions/v1/onesignal-push',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('request.headers')::json->>'authorization'
+    ),
+    body := jsonb_build_object('record', row_to_json(new))
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- 3. Tạo Trigger trên bảng orders
+drop trigger if exists on_new_order_push on public.orders;
+create trigger on_new_order_push
+  after insert on public.orders
+  for each row execute function public.send_onesignal_notification();
+```
+
+> **Lưu ý:** Cách dùng SQL này yêu cầu bạn phải thay URL chính xác của Project nếu biến `host` không tự nhận diện được. Tốt nhất nên dùng **Lựa chọn A** để Supabase tự xử lý bảo mật và URL.
+
 ---
 **Xong!** Bây giờ, bất cứ khi nào ai đó tạo đơn hàng mới, Supabase sẽ gửi thông báo đẩy tới tất cả các thiết bị đã đăng ký thông qua OneSignal.
+
+## Xử lý lỗi "Domain Mismatch"
+
+Nếu bạn thấy lỗi "Domain Mismatch" trong Console hoặc nút đăng ký bị vô hiệu hóa:
+
+1. OneSignal yêu cầu domain của trang web phải khớp với **Site URL** bạn đã đăng ký.
+2. Truy cập **OneSignal Dashboard** -> **Settings** -> **Web Configuration**.
+3. Tại phần **Site Setup**, cập nhật **Site URL** thành URL hiện tại của ứng dụng (ví dụ: `https://ais-dev-...run.app`).
+4. Nếu bạn muốn chạy trên cả domain chính (`vercel.app`) và preview, bạn có thể tạo 2 App khác nhau trong OneSignal hoặc sử dụng tính năng domain phụ nếu có.
+5. Đảm bảo file `OneSignalSDKWorker.js` (nếu có yêu cầu cài đặt thủ công) được đặt ở thư mục `public/`. Tuy nhiên, với `react-onesignal`, việc khởi tạo thường tự xử lý service worker.

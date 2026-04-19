@@ -42,7 +42,7 @@ import { Order, PharmacyName, PHARMACIES } from './types';
 import { OrderCard } from './components/OrderCard';
 import { UploadForm } from './components/UploadForm';
 import { GridSkeleton } from './components/SkeletonLoader';
-import { initOneSignal, subscribeToNotifications } from './lib/onesignal';
+import { initOneSignal, subscribeToNotifications, checkOneSignalAvailable, isSubscribedToOneSignal } from './lib/onesignal';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -404,8 +404,24 @@ export default function App() {
                   ) : (
                     <div className="p-3 bg-zinc-900 border-t border-white/5 flex flex-col gap-2">
                       <p className="text-[10px] text-zinc-400 font-medium px-1">Đã bật thông báo trình duyệt</p>
-                      <Button onClick={subscribeToNotifications} variant="outline" className="w-full h-8 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-[10px] font-bold uppercase tracking-widest bg-transparent">
-                        Đăng ký thông báo đẩy (OneSignal)
+                      <Button 
+                        onClick={subscribeToNotifications} 
+                        variant="outline" 
+                        disabled={!checkOneSignalAvailable() || isSubscribedToOneSignal()}
+                        className={cn(
+                          "w-full h-8 text-[10px] font-bold uppercase tracking-widest bg-transparent",
+                          isSubscribedToOneSignal()
+                            ? "border-emerald-500/50 text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/5 cursor-default"
+                            : checkOneSignalAvailable() 
+                              ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                              : "border-orange-500/30 text-orange-400 opacity-60 cursor-not-allowed"
+                        )}
+                      >
+                        {isSubscribedToOneSignal() 
+                          ? 'Đã đăng ký thông báo đẩy ✅' 
+                          : checkOneSignalAvailable() 
+                            ? 'Đăng ký thông báo đẩy (OneSignal)' 
+                            : 'OneSignal: Sai domain (Xem Console)'}
                       </Button>
                     </div>
                   )}
