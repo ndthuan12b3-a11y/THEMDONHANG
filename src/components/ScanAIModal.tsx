@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { scanInvoice, ScanResult } from '../services/geminiService';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { logUserActivity } from './SystemLogsModal';
 
 interface ScanAIModalProps {
   isOpen: boolean;
@@ -24,16 +25,19 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
 
-  const handleScan = async () => {
+  const handleScan = async (forceRescan: boolean = false) => {
     try {
       // 1. Check Cache first to achieve 0đ cost for re-scans
       const cacheKey = `ai_scan_${mode}_${imageUrls.join(',')}`;
-      const cached = localStorage.getItem(cacheKey);
       
-      if (cached) {
-        setResult(JSON.parse(cached));
-        toast.info("Đã tải kết quả từ Bộ Nhớ Đệm (Miễn phí API)");
-        return;
+      if (!forceRescan) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          setResult(JSON.parse(cached));
+          toast.info("Đã tải kết quả từ Bộ Nhớ Đệm (Miễn phí API)");
+          logUserActivity('Quét AI (Cache)', `Sử dụng chế độ ${mode} bằng dữ liệu lưu trữ tạm`);
+          return;
+        }
       }
 
       setIsScanning(true);
@@ -57,8 +61,10 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
       if (scanResult.quality.isGood) {
         localStorage.setItem(cacheKey, JSON.stringify(scanResult));
         toast.success("Quét AI thành công!");
+        logUserActivity('Quét AI (API)', `Sử dụng Gemini bóc tách hóa đơn ở chế độ ${mode}`);
       } else {
         toast.warning(`Chất lượng ảnh thấp: ${scanResult.quality.reason}`);
+        logUserActivity('Quét AI (Thất bại)', `Ảnh chất lượng thấp: ${scanResult.quality.reason}`);
       }
       setResult(scanResult);
       
@@ -157,7 +163,7 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
 
               <div className="pt-2">
                 <Button 
-                  onClick={handleScan}
+                  onClick={() => handleScan(false)}
                   disabled={isScanning}
                   className="w-full h-14 rounded-2xl bg-zinc-900 border-none shadow-xl hover:bg-zinc-800 text-base font-black uppercase tracking-widest transition-all group overflow-hidden relative"
                 >
@@ -174,6 +180,17 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                     </>
                   )}
                 </Button>
+                
+                {localStorage.getItem(`ai_scan_${mode}_${imageUrls.join(',')}`) && (
+                  <Button 
+                    onClick={() => handleScan(true)}
+                    disabled={isScanning}
+                    variant="outline"
+                    className="w-full h-10 mt-2 rounded-xl text-xs font-bold text-zinc-500 hover:text-zinc-900"
+                  >
+                    Quét Lại (Bỏ qua lưu tạm)
+                  </Button>
+                )}
               </div>
             </div>
 

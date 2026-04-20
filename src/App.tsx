@@ -16,7 +16,8 @@ import {
   RotateCw,
   Bell,
   CheckCircle2,
-  Info
+  Info,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +44,7 @@ import { OrderCard } from './components/OrderCard';
 import { UploadForm } from './components/UploadForm';
 import { GridSkeleton } from './components/SkeletonLoader';
 import { initOneSignal, subscribeToNotifications, checkOneSignalAvailable, isSubscribedToOneSignal } from './lib/onesignal';
+import { SystemLogsModal, logUserActivity } from './components/SystemLogsModal';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,7 @@ export default function App() {
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [notifications, setNotifications] = useState<{id: string, title: string, body: string, time: Date, read: boolean}[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [isSystemLogsOpen, setIsSystemLogsOpen] = useState(false);
   
   const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -121,6 +124,7 @@ export default function App() {
 
       if (error) throw error;
       toast.success("Đã xóa đơn hàng.");
+      logUserActivity('Xóa hàng loạt', `Đã dọn dẹp ${completedOrdersIDs.length} đơn hàng hoàn thành tại ${selectedPharmacy}`);
     } catch (error) {
       toast.error("Lỗi khi xóa.");
     }
@@ -440,6 +444,18 @@ export default function App() {
                 <span className="text-xs font-bold text-zinc-600 truncate max-w-[80px]">{userName || 'Hồ sơ'}</span>
               </Button>
 
+              {userName && userName.trim().toLowerCase() === 'thuận' && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsSystemLogsOpen(true)}
+                  className="hidden md:flex h-9 rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors"
+                >
+                  <Activity className="h-4 w-4 mr-1.5" />
+                  <span className="text-xs font-bold uppercase tracking-tight">Giám Sát</span>
+                </Button>
+              )}
+
               <div className="hidden md:flex h-9 items-center gap-1 rounded-xl bg-zinc-100 p-1">
                 <Button 
                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
@@ -639,6 +655,11 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SystemLogsModal 
+        isOpen={isSystemLogsOpen}
+        onClose={() => setIsSystemLogsOpen(false)}
+      />
     </div>
   );
 }

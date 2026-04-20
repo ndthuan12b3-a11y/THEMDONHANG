@@ -36,6 +36,7 @@ import {
 import { Order, PharmacyName, PHARMACIES } from '../types';
 import { ScanAIModal } from './ScanAIModal';
 import { Sparkles } from 'lucide-react';
+import { logUserActivity } from './SystemLogsModal';
 
 interface OrderCardProps {
   order: Order;
@@ -101,6 +102,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         .eq('id', order.id);
 
       if (error) throw error;
+      logUserActivity('Xóa đơn hàng', `Xóa vĩnh viễn đơn "${order.orderName}" của [${order.pharmacy}]`);
       toast.success("Đã xóa đơn hàng.");
       setIsDeleteConfirmOpen(false);
     } catch (error) {
@@ -123,6 +125,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         .eq('id', order.id);
 
       if (error) throw error;
+      logUserActivity('Sửa đơn hàng', `Cập nhật thông tin đơn "${editOrderName}"`);
       setIsEditing(false);
       toast.success("Đã cập nhật thông tin đơn hàng.");
     } catch (error) {
@@ -141,6 +144,10 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         .eq('id', order.id);
 
       if (error) throw error;
+      logUserActivity(
+        newStatus === 'completed' ? 'Hoàn thành đơn' : 'Bỏ hoàn thành đơn',
+        `Chuyển trạng thái đơn "${order.orderName}"`
+      );
       toast.success(newStatus === 'completed' ? "Đã đánh dấu hoàn thành." : "Đã bỏ đánh dấu hoàn thành.");
     } catch (error) {
       console.error(error);

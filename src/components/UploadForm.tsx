@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { PharmacyName, PHARMACIES } from '../types';
 import { ImageEditor } from './ImageEditor';
+import { logUserActivity } from './SystemLogsModal';
 
 interface UploadFormProps {
   defaultPharmacy: PharmacyName;
@@ -246,6 +247,10 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
 
       saveSupplierToHistory(orderName);
       toast.success("Đã thêm đơn hàng thành công!", { id: loadingToast });
+      logUserActivity('Tải lên đơn hàng', `Gửi đơn "${orderName.trim()}" với ${files.length} ảnh tới ${pharmacy}`);
+      
+      // Cleanup locally
+      files.forEach(f => URL.revokeObjectURL(f.preview));
       onSuccess();
     } catch (error: any) {
       console.error("Supabase Submit Error:", error);
