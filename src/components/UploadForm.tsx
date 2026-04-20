@@ -104,8 +104,8 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            // Optimize for AI vision: 1600px is the sweet spot for OCR clarity vs Token/Bandwidth cost.
-            const MAX_SIZE = 1600; 
+            // Super aggressive cost optimization: 1024px limit
+            const MAX_SIZE = 1024; 
             let width = img.width;
             let height = img.height;
 
@@ -122,7 +122,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
               ctx.drawImage(img, 0, 0, width, height);
               canvas.toBlob((blob) => {
                 resolve(blob || file);
-              }, file.type || 'image/jpeg', 0.85); // 0.85 maintains high text clarity with minimal size
+              }, file.type || 'image/jpeg', 0.7); // 0.7 drops data size drastically
             } else {
               resolve(file);
             }

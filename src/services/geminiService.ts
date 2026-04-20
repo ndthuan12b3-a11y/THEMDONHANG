@@ -119,7 +119,7 @@ Return valid JSON.`;
     }));
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", // Official stable flash replacement model
+      model: "gemini-3.1-flash-lite-preview", // Absolute lowest-cost model
       contents: {
         parts: [
           ...imageParts,
