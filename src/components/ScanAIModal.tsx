@@ -13,6 +13,7 @@ import { scanInvoice, ScanResult } from '../services/geminiService';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { logUserActivity } from './SystemLogsModal';
+import { supabase } from '../supabase';
 
 interface ScanAIModalProps {
   isOpen: boolean;
@@ -27,10 +28,24 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
 
   const handleScan = async (forceRescan: boolean = false) => {
     try {
-      // 1. Check Cache first to achieve 0đ cost for re-scans
       const cacheKey = `ai_scan_${mode}_${imageUrls.join(',')}`;
       
       if (!forceRescan) {
+        // 1. Check Cloud Cache first (Sync for everyone)
+        const { data: cloudCached } = await supabase
+          .from('ai_scan_cache')
+          .select('result')
+          .eq('cache_key', cacheKey)
+          .maybeSingle();
+
+        if (cloudCached) {
+          setResult(cloudCached.result);
+          toast.info("⚡ Tải kết quả từ Cloud Cache (Đồng bộ 0đ)");
+          logUserActivity('Quét AI (Cloud)', `Sử dụng kết quả đồng bộ cho chế độ ${mode}`);
+          return;
+        }
+
+        // 2. Fallback to Local Cache
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           setResult(JSON.parse(cached));
@@ -59,7 +74,15 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
       
       // 2. Save to Cache on success
       if (scanResult.quality.isGood) {
+        // Save Local
         localStorage.setItem(cacheKey, JSON.stringify(scanResult));
+        
+        // Save Cloud (Sync for everyone)
+        await supabase.from('ai_scan_cache').upsert({
+          cache_key: cacheKey,
+          result: scanResult
+        });
+
         toast.success("Quét AI thành công!");
         logUserActivity('Quét AI (API)', `Sử dụng Gemini bóc tách hóa đơn ở chế độ ${mode}`);
       } else {

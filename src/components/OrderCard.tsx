@@ -492,21 +492,22 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               SCAN AI
             </Button>
             <Button 
-              variant={order.status === 'completed' ? "default" : "outline"} 
               size="sm" 
               className={cn(
-                "h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-none",
-                order.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600" : "text-zinc-500 hover:text-zinc-900 border-zinc-200"
+                "h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md",
+                order.status === 'completed' 
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                  : "bg-white border-2 border-zinc-200 text-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
               )}
               onClick={handleToggleComplete}
             >
-              <CheckCircle2 className={cn("h-3.5 w-3.5", order.status === 'completed' ? "text-white" : "text-zinc-400")} />
+              <CheckCircle2 className="h-3.5 w-3.5" />
               {order.status === 'completed' ? "Đã xong" : "Hoàn thành"}
             </Button>
             <Button 
-              variant="ghost" 
               size="sm" 
-              className="h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600"
+              variant="outline"
+              className="h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-zinc-900 border-2 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-400 bg-white shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);

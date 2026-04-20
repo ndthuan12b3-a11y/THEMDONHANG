@@ -105,9 +105,11 @@ Combine all items in order into the single 'd' array.
 
 MODE SAPO mapping:
 n: stt, t: tên sản phẩm, l: số lô, h: hsd (DD/MM/YYYY), dv: đơn vị, q: số lượng, p: đơn giá, c: chiết khấu, tt: thành tiền.
+Format p and tt: xxx,xxx,xxx (no decimals)
 
 MODE GPP mapping:
 t: tên hàng, l: số lô, h: hsd (DD/MM/YYYY), dv: đơn vị tính, q: số lượng, p: đơn giá nhập, c: chiết khấu, v: vat %, tt: thành tiền.
+Format p and tt: xxx,xxx,xxx.xx (MUST ALWAYS INCLUDE 2 DECIMAL PLACES, e.g., 10,000.00)
 
 Return valid JSON.`;
 
