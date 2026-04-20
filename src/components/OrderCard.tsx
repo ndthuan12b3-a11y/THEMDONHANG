@@ -519,19 +519,20 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
           {/* Delete Confirmation */}
           <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-            <DialogContent className="w-[95%] sm:max-w-[425px] rounded-2xl sm:rounded-3xl">
+              <DialogContent className="w-[95%] sm:max-w-[425px] rounded-2xl sm:rounded-3xl bg-white shadow-2xl border-zinc-200">
               <DialogHeader>
-                <DialogTitle className="sm:text-left text-center">Xác nhận xóa</DialogTitle>
+                <DialogTitle className="sm:text-left text-center text-red-600">Xác nhận xóa đơn</DialogTitle>
               </DialogHeader>
-              <div className="py-4 text-sm text-zinc-500 text-center">
-                <div className="mx-auto w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
-                  <Trash2 className="h-6 w-6" />
+              <div className="py-6 text-sm text-zinc-700 text-center">
+                <div className="mx-auto w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-4 border-2 border-red-100">
+                  <Trash2 className="h-8 w-8" />
                 </div>
-                Bạn có chắc chắn muốn xóa đơn hàng <strong className="text-zinc-900 font-bold">{order.orderName}</strong>? Hành động này không thể hoàn tác.
+                Bạn có chắc chắn muốn xóa đơn hàng <strong className="text-zinc-900 font-bold block text-base mt-2">{order.orderName}</strong>? 
+                <p className="text-xs text-zinc-400 mt-2">Hành động này không thể hoàn tác.</p>
               </div>
               <DialogFooter className="flex flex-row gap-2 sm:justify-end">
-                <Button variant="ghost" onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 sm:flex-none rounded-xl h-10 sm:h-9">Hủy</Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="flex-1 sm:flex-none rounded-xl h-10 sm:h-9 bg-red-600 hover:bg-red-700 font-bold">
+                <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 sm:flex-none rounded-xl h-12 sm:h-10 border-zinc-200 font-bold">Hủy</Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="flex-1 sm:flex-none rounded-xl h-12 sm:h-10 bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-200">
                   {isDeleting ? "Đang xóa..." : "Xác nhận xóa"}
                 </Button>
               </DialogFooter>

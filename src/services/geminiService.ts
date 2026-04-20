@@ -48,7 +48,7 @@ export const scanInvoice = async (
             c: { type: Type.STRING },
             tt: { type: Type.STRING }
           },
-          required: ["t", "q", "p", "tt"]
+          required: ["t", "q", "p", "tt", "l", "h"] // Force l and h
         }
       }
     },
@@ -82,7 +82,7 @@ export const scanInvoice = async (
             v: { type: Type.NUMBER },
             tt: { type: Type.STRING }
           },
-          required: ["t", "q", "p", "tt"]
+          required: ["t", "q", "p", "tt", "l", "h"] // Force l and h
         }
       }
     },
@@ -93,20 +93,21 @@ export const scanInvoice = async (
 Step 1: Check quality. If bad, set q.g=false and reason in q.r.
 Step 2: If good, extract items based on mode.
 
-***CRITICAL RULE FOR PRICES***: 
-- MODE SAPO: ALWAYS extract the AFTER TAX prices.
-- MODE GPP: ALWAYS extract the BEFORE TAX prices for unit price and line total. Extract VAT rate.
-- FINAL TOTAL: Extract the explicitly stated "Tổng cộng" / "Tổng tiền thanh toán" into 'tot'.
+***CRITICAL RULES***:
+1. YOU MUST EXTRACT 'số lô' (l) AND 'hạn dùng' (h) FOR EVERY SINGLE ITEM. 
+   - If not found, output 'N/A'. DO NOT leave blank.
+   - HSD format: DD/MM/YYYY. If only month/year or year, convert to DD/MM/YYYY (e.g. 12/2025 -> 01/12/2025).
+2. MODE SAPO: ALWAYS extract the AFTER TAX prices.
+3. MODE GPP: ALWAYS extract the BEFORE TAX prices for unit price and line total. Extract VAT rate.
+4. FINAL TOTAL: Extract the explicitly stated "Tổng cộng" / "Tổng tiền thanh toán" into 'tot'.
 
 Combine all items in order into the single 'd' array.
 
 MODE SAPO mapping:
 n: stt, t: tên sản phẩm, l: số lô, h: hsd (DD/MM/YYYY), dv: đơn vị, q: số lượng, p: đơn giá, c: chiết khấu, tt: thành tiền.
-Format: xxx,xxx,xxx
 
 MODE GPP mapping:
 t: tên hàng, l: số lô, h: hsd (DD/MM/YYYY), dv: đơn vị tính, q: số lượng, p: đơn giá nhập, c: chiết khấu, v: vat %, tt: thành tiền.
-Format: xxx,xxx,xxx.xx
 
 Return valid JSON.`;
 
