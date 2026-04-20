@@ -34,6 +34,8 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Order, PharmacyName, PHARMACIES } from '../types';
+import { ScanAIModal } from './ScanAIModal';
+import { Sparkles } from 'lucide-react';
 
 interface OrderCardProps {
   order: Order;
@@ -83,6 +85,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
   const [editOrderName, setEditOrderName] = useState(order.orderName);
   const [editPharmacy, setEditPharmacy] = useState<PharmacyName>(order.pharmacy);
   const [editNote, setEditNote] = useState(order.note || '');
+  const [isScanOpen, setIsScanOpen] = useState(false);
 
   const pharmacyConfig = PHARMACIES.find(p => p.name === order.pharmacy) || PHARMACIES[0];
   const imageUrls = order.imageUrls || (order.imageUrl ? [order.imageUrl] : []);
@@ -262,6 +265,18 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
           </div>
           <div className="flex items-center justify-end gap-1.5 sm:gap-2">
             <Button 
+              variant="outline" 
+              size="sm" 
+              className="hidden md:flex h-7 sm:h-9 gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl text-[9px] sm:text-[11px] font-black uppercase tracking-wider border-emerald-500/20 text-emerald-600 hover:bg-emerald-50 px-2 sm:px-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsScanOpen(true);
+              }}
+            >
+              <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span>SCAN AI</span>
+            </Button>
+            <Button 
               variant={order.status === 'completed' ? "default" : "outline"} 
               size="sm" 
               className={cn(
@@ -413,6 +428,17 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               <Button 
                 size="icon" 
                 variant="secondary" 
+                className="hidden md:flex h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white text-emerald-600 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsScanOpen(true);
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="secondary" 
                 className="h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -446,6 +472,18 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         </CardContent>
         <CardFooter className="flex justify-between p-4 pt-0">
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="hidden md:flex h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border-emerald-500/20 text-emerald-600 hover:bg-emerald-50"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsScanOpen(true);
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              SCAN AI
+            </Button>
             <Button 
               variant={order.status === 'completed' ? "default" : "outline"} 
               size="sm" 
@@ -542,6 +580,12 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <ScanAIModal 
+            isOpen={isScanOpen}
+            onOpenChange={setIsScanOpen}
+            imageUrls={imageUrls}
+          />
         </CardFooter>
       </Card>
     </motion.div>

@@ -104,8 +104,8 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            // Moderate 4K to 3200px for better stability on mobile browsers (less memory crashes)
-            const MAX_SIZE = 3200; 
+            // Optimize for AI vision: 1600px is the sweet spot for OCR clarity vs Token/Bandwidth cost.
+            const MAX_SIZE = 1600; 
             let width = img.width;
             let height = img.height;
 
@@ -122,7 +122,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
               ctx.drawImage(img, 0, 0, width, height);
               canvas.toBlob((blob) => {
                 resolve(blob || file);
-              }, file.type || 'image/jpeg', 0.8); // 0.8 is great balance
+              }, file.type || 'image/jpeg', 0.85); // 0.85 maintains high text clarity with minimal size
             } else {
               resolve(file);
             }
@@ -153,6 +153,20 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
     setFiles(prev => prev.filter((_, i) => i !== index));
     setPreviews(prev => prev.filter((_, i) => i !== index));
   };
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        const imageFiles = Array.from(e.clipboardData.files).filter(file => file.type.startsWith('image/'));
+        if (imageFiles.length > 0) {
+          onDrop(imageFiles);
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [onDrop]);
 
   const { getRootProps, getInputProps, isDragActive, open: openLibrary } = useDropzone({
     onDrop,
@@ -242,7 +256,26 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
   };
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div {...getRootProps()} className="flex flex-col h-full relative w-full focus:outline-none">
+      <input {...getInputProps()} />
+      
+      <AnimatePresence>
+        {isDragActive && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 rounded-3xl bg-emerald-500/95 flex flex-col items-center justify-center text-white backdrop-blur-md border-4 border-white/20 border-dashed m-1 shadow-2xl"
+          >
+            <div className="p-6 bg-white/10 rounded-full mb-6">
+              <ImageIcon className="h-16 w-16 animate-bounce" />
+            </div>
+            <p className="text-2xl font-black tracking-widest uppercase">Thả ảnh vào đây</p>
+            <p className="text-sm font-medium opacity-80 mt-2 tracking-wider">Tự động nhận diện và thêm vào đơn hàng</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-1 space-y-6 min-h-0 no-scrollbar pb-6 pt-4">
         <div className="space-y-6">
           <div className="space-y-4">
@@ -272,14 +305,12 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
               </button>
 
               <div 
-                {...getRootProps()}
                 onClick={openLibrary}
                 className={cn(
                   "flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 transition-all cursor-pointer active:scale-[0.98]",
-                  isDragActive ? "border-zinc-900 bg-zinc-50" : "border-zinc-100 bg-zinc-50/50 hover:bg-zinc-100/50 hover:border-zinc-200"
+                  "border-zinc-100 bg-zinc-50/50 hover:bg-zinc-100/50 hover:border-zinc-200"
                 )}
               >
-                <input {...getInputProps()} />
                 <div className="p-3 rounded-full bg-zinc-200 text-zinc-500 group-hover:scale-110 transition-transform">
                   <ImageIcon className="h-6 w-6" />
                 </div>
