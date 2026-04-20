@@ -29,7 +29,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
   const [previews, setPreviews] = useState<string[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-  const DEFAULT_SUPPLIERS = ['TỔNG KHO 9797', 'NT TUỆ THIỆN', 'NT HƯNG THỊNH', 'NT PHÚC AN'];
+  const DEFAULT_SUPPLIERS = ['TỔNG KHO 0907', 'NT TUỆ THIỆN', 'NT HƯNG THỊNH', 'NT PHÚC AN'];
 
   useEffect(() => {
     const saved = localStorage.getItem('supplier_history');
