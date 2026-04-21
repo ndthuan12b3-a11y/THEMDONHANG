@@ -12,6 +12,7 @@ export interface Order {
   note: string;
   timestamp: any;
   status?: 'pending' | 'completed';
+  completed_at?: any;
 }
 
 export interface PharmacyConfig {

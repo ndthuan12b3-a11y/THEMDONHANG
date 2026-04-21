@@ -135,11 +135,16 @@
 /* PhotoSwipe Specific Quality Enhancements */
 .pswp__img {
   image-rendering: -webkit-optimize-contrast !important;
-  image-rendering: auto !important; /* Back to auto for photos but keep contrast for text */
+  image-rendering: high-quality !important;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  /* Very subtle sharpening filter */
+  filter: contrast(1.05) brightness(1.02);
 }
 
 .pswp--zoomed-in .pswp__img {
+  image-rendering: -webkit-optimize-contrast !important;
   image-rendering: high-quality !important;
+  /* Slightly more pop when zoomed in */
+  filter: contrast(1.1) brightness(1.02) saturate(1.05);
 }

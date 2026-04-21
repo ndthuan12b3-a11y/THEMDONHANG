@@ -105,8 +105,8 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            // Super aggressive cost optimization: 1024px limit
-            const MAX_SIZE = 1024; 
+            // High-resolution optimization: 2560px (4K-ish) for extreme sharpness in zoom
+            const MAX_SIZE = 2560; 
             let width = img.width;
             let height = img.height;
 
@@ -120,10 +120,13 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (ctx) {
+              // Enhanced quality filter to reduce blur marks
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
               ctx.drawImage(img, 0, 0, width, height);
               canvas.toBlob((blob) => {
                 resolve(blob || file);
-              }, file.type || 'image/jpeg', 0.7); // 0.7 drops data size drastically
+              }, file.type || 'image/jpeg', 0.9); // 0.9 quality for professional archival detail
             } else {
               resolve(file);
             }
@@ -250,7 +253,9 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
       logUserActivity('Tải lên đơn hàng', `Gửi đơn "${orderName.trim()}" với ${files.length} ảnh tới ${pharmacy}`);
       
       // Cleanup locally
-      files.forEach(f => URL.revokeObjectURL(f.preview));
+      files.forEach((f: any) => {
+        if (f.preview) URL.revokeObjectURL(f.preview);
+      });
       onSuccess();
     } catch (error: any) {
       console.error("Supabase Submit Error:", error);

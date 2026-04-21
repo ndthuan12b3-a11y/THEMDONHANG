@@ -164,7 +164,8 @@ export default function App() {
         hasRecordedBatchInfo: o.has_recorded_batch_info,
         note: o.note || '',
         timestamp: { toDate: () => new Date(o.created_at) },
-        status: o.status
+        status: o.status,
+        completed_at: o.completed_at
       }));
 
       setOrders(mappedOrders);
@@ -227,6 +228,35 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  // Auto Cleanup - Delete completed orders older than 7 days
+  useEffect(() => {
+    const runCleanup = async () => {
+      try {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        // We delete directly from DB where status is completed AND completed_at < 7 days ago
+        const { error, count } = await supabase
+          .from('orders')
+          .delete({ count: 'exact' })
+          .eq('status', 'completed')
+          .lt('completed_at', sevenDaysAgo.toISOString());
+
+        if (error) throw error;
+        if (count && count > 0) {
+          console.log(`♻️ Dọn dẹp tự động: Đã xóa ${count} đơn hàng hoàn thành cách đây hơn 7 ngày.`);
+        }
+      } catch (err) {
+        // Silently fail or log to console, we don't want to disturb the user with cleanup errors
+        console.warn("Dọn dẹp tự động không thành công:", err);
+      }
+    };
+
+    // Run cleanup after 5 seconds of app launch to avoid heavy initial load
+    const timer = setTimeout(runCleanup, 5000);
+    return () => clearTimeout(timer);
   }, []);
 
   const filteredOrders = useMemo(() => {

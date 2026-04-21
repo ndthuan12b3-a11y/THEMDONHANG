@@ -137,10 +137,16 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
   const handleToggleComplete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const newStatus = order.status === 'completed' ? 'pending' : 'completed';
+      const isCompleting = order.status !== 'completed';
+      const newStatus = isCompleting ? 'completed' : 'pending';
+      const completedAt = isCompleting ? new Date().toISOString() : null;
+      
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
+        .update({ 
+          status: newStatus,
+          completed_at: completedAt
+        })
         .eq('id', order.id);
 
       if (error) throw error;
@@ -190,13 +196,14 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
       // might block the default PhotoSwipe wheel handler
       if (!e.ctrlKey) {
         e.preventDefault();
-        const zoomSpeed = 0.0015; 
+        const zoomSpeed = 0.002; 
         const delta = -e.deltaY;
         const currentZoom = pswp.currSlide.currZoomLevel;
         
         let newZoom = currentZoom * (1 + delta * zoomSpeed);
-        // Min/Max zoom boundaries - capped at 2.5x natural size to prevent heavy pixelation (vỡ ảnh)
-        newZoom = Math.max(pswp.currSlide.zoomLevels.initial * 0.5, Math.min(newZoom, pswp.currSlide.zoomLevels.max * 2.5));
+        // Deep zoom allowed (up to 5x natural size) because we now upload high-res images
+        const maxAllowedZoom = pswp.currSlide.zoomLevels.max * 5;
+        newZoom = Math.max(pswp.currSlide.zoomLevels.initial * 0.5, Math.min(newZoom, maxAllowedZoom));
 
         const center = { x: e.clientX, y: e.clientY };
         pswp.currSlide.zoomTo(newZoom, center, 0); 
@@ -231,12 +238,12 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
           pharmacyConfig.border
         )}
       >
-        <Gallery onOpen={handleGalleryOpen} options={{ bgOpacity: 0.9, padding: { top: 20, bottom: 20, left: 20, right: 20 }, wheelToZoom: true, secondaryZoomLevel: 1.5, maxZoomLevel: 3 }}>
+        <Gallery onOpen={handleGalleryOpen} options={{ bgOpacity: 0.9, padding: { top: 20, bottom: 20, left: 20, right: 20 }, wheelToZoom: true, secondaryZoomLevel: 2, maxZoomLevel: 5 }}>
           <div className="relative h-20 w-20 sm:h-32 sm:w-32 shrink-0 overflow-hidden rounded-lg sm:rounded-xl border border-zinc-100">
             {renderGalleryItems()}
 
             {order.status === 'completed' && (
-              <div className="absolute inset-0 z-20 bg-emerald-500/10 flex items-center justify-center backdrop-blur-[0.5px] pointer-events-none">
+              <div className="absolute inset-0 z-20 bg-emerald-500/10 flex items-center justify-center pointer-events-none">
                  <CheckCircle2 className="h-8 w-8 text-emerald-500 bg-white rounded-full p-1 shadow-sm" />
               </div>
             )}
@@ -407,12 +414,12 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         "group overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm transition-all hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:border-zinc-200",
         pharmacyConfig.border
       )}>
-        <Gallery onOpen={handleGalleryOpen} options={{ bgOpacity: 0.9, padding: { top: 20, bottom: 20, left: 20, right: 20 }, wheelToZoom: true, secondaryZoomLevel: 1.5, maxZoomLevel: 3 }}>
+        <Gallery onOpen={handleGalleryOpen} options={{ bgOpacity: 0.9, padding: { top: 20, bottom: 20, left: 20, right: 20 }, wheelToZoom: true, secondaryZoomLevel: 2, maxZoomLevel: 5 }}>
           <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100">
             {renderGalleryItems()}
 
             {order.status === 'completed' && (
-              <div className="absolute inset-0 z-20 bg-emerald-500/10 flex items-center justify-center backdrop-blur-[0.5px] pointer-events-none">
+              <div className="absolute inset-0 z-20 bg-emerald-500/10 flex items-center justify-center pointer-events-none">
                 <div className="bg-white rounded-full p-2 shadow-xl scale-110">
                   <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                 </div>
@@ -480,15 +487,14 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         <CardFooter className="flex justify-between p-4 pt-0">
           <div className="flex gap-2">
             <Button 
-              variant="outline" 
               size="sm" 
-              className="hidden md:flex h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border-emerald-500/20 text-emerald-600 hover:bg-emerald-50"
+              className="hidden md:flex h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-zinc-900 border-none text-white hover:bg-zinc-800 shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsScanOpen(true);
               }}
             >
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
               SCAN AI
             </Button>
             <Button 
