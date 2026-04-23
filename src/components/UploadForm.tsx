@@ -404,7 +404,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
                           ) : (
                             <div className="bg-emerald-500/90 backdrop-blur text-white px-1.5 py-0.5 rounded-md shadow flex items-center gap-1 border border-emerald-400">
                               <Sparkles className="w-3 h-3" />
-                              <span className="text-[9px] font-bold">Nét</span>
+                              <span className="text-[9px] font-bold">Đạt Chuẩn AI</span>
                             </div>
                           )}
                         </div>

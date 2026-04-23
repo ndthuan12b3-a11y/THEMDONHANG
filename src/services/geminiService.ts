@@ -20,7 +20,6 @@ export interface ImageQualityResult {
 export const checkImageQuality = async (imageBase64: string): Promise<ImageQualityResult> => {
   if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
 
-  // Extremely minified schema to save cost
   const qualitySchema = {
     type: Type.OBJECT,
     properties: {
@@ -33,13 +32,29 @@ export const checkImageQuality = async (imageBase64: string): Promise<ImageQuali
     required: ["g", "i"]
   };
 
+  const prompt = `Bạn là chuyên gia kiểm định hình ảnh cho hệ thống OCR y tế. 
+Nhiệm vụ: Đánh giá xem ảnh hóa đơn này có đủ độ nét để trích xuất dữ liệu chính xác (tên thuốc, số lô, hạn dùng) hay không.
+
+TIÊU CHUẨN CỰC KỲ KHẮT KHE:
+1. Độ nét (Blur): Nếu các dòng chữ nhỏ nhất bị nhòe, không phân biệt được chữ 'o' và 'e', hoặc 'i' và 'l' -> g=false, i=["Mờ"].
+2. Độ lóa (Glare): Nếu có ánh đèn flash phản chiếu làm mất chi tiết ở bất kỳ khu vực chứa chữ nào -> g=false, i=["Lóa"].
+3. Ánh sáng: Nếu ảnh quá tối dẫn đến nhiễu hạt che mất nét chữ -> g=false, i=["Thiếu sáng"].
+4. Góc chụp: Nếu ảnh bị cắt mất góc hóa đơn hoặc quá nghiêng khiến chữ bị biến dạng -> g=false, i=["Góc chụp"].
+
+Trả về JSON:
+- g: true nếu ảnh HOÀN HẢO, nét căng.
+- g: false nếu có bất kỳ lỗi nào trên.
+- i: Danh sách các lỗi bằng tiếng Việt (tối đa 2 lỗi quan trọng nhất).
+
+HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả về false.`;
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite-preview",
       contents: {
         parts: [
           { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] || imageBase64 } },
-          { text: "Check if image is clear and readable for OCR. Return g=true if good. If bad (blurry, glare, unreadable), return g=false and list issues in 'i' (in Vietnamese)." }
+          { text: prompt }
         ]
       },
       config: {
@@ -55,7 +70,7 @@ export const checkImageQuality = async (imageBase64: string): Promise<ImageQuali
     };
   } catch (error) {
     console.error("Gemini Check Quality Error:", error);
-    return { isGood: true, issues: [] }; // Fallback to true if API fails
+    return { isGood: true, issues: [] };
   }
 };
 
