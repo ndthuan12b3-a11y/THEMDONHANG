@@ -39,12 +39,28 @@ import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 
 // New Components & Types
-import { Order, PharmacyName, PHARMACIES } from './types';
+import { Order, PharmacyName, PHARMACIES, PHARMACY_GROUPS } from './types';
 import { OrderCard } from './components/OrderCard';
 import { UploadForm } from './components/UploadForm';
 import { GridSkeleton } from './components/SkeletonLoader';
 import { initOneSignal, subscribeToNotifications, checkOneSignalAvailable, isSubscribedToOneSignal } from './lib/onesignal';
 import { SystemLogsModal, logUserActivity } from './components/SystemLogsModal';
+import { HuoctsiHub } from './components/HuoctsiHub';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1 }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 5 },
+  show: { 
+    opacity: 1, 
+    y: 0, 
+    transition: { type: "tween", duration: 0.2, ease: "easeOut" }
+  },
+  exit: { opacity: 0, transition: { duration: 0.15 } }
+};
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -53,6 +69,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedPharmacy, setSelectedPharmacy] = useState<PharmacyName>('Hưng Thịnh');
+  const [selectedGroupName, setSelectedGroupName] = useState(PHARMACY_GROUPS[0].name);
   const [userName, setUserName] = useState<string | null>(null);
   const [isUserPromptOpen, setIsUserPromptOpen] = useState(false);
   const [tempUserName, setTempUserName] = useState('');
@@ -284,11 +301,20 @@ export default function App() {
     const groups: { [date: string]: Order[] } = {};
     filteredOrders.forEach(order => {
       if (!order.timestamp) return;
-      // Handle Supabase timestamp mapping (it has toDate from my mapping)
       const date = format(order.timestamp.toDate(), 'yyyy-MM-dd');
       if (!groups[date]) groups[date] = [];
       groups[date].push(order);
     });
+
+    // Sort within groups: pending first, then completed
+    Object.keys(groups).forEach(date => {
+      groups[date].sort((a, b) => {
+        if (a.status === 'completed' && b.status !== 'completed') return 1;
+        if (a.status !== 'completed' && b.status === 'completed') return -1;
+        return 0; // Keep relative order of items with same status
+      });
+    });
+
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredOrders]);
 
@@ -300,7 +326,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col">
+    <div className={cn(
+      "min-h-screen flex flex-col transition-colors duration-700 ease-in-out",
+      selectedPharmacy === 'HĐ THUOCSI' ? "bg-[#020617]" : "bg-zinc-50"
+    )}>
       <Toaster position="top-center" expand={false} richColors />
 
       {isConfigMissing && (
@@ -322,12 +351,20 @@ export default function App() {
       )}
       
       {/* Universal Header - Mobile & Desktop Hybrid */}
-      <header className="sticky top-0 z-40 w-full border-b bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70">
+      <header className={cn(
+        "sticky top-0 z-[60] w-full border-b transition-all duration-500",
+        selectedPharmacy === 'HĐ THUOCSI' 
+          ? "bg-[#020617]/80 backdrop-blur-3xl border-white/10 text-white" 
+          : "bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-zinc-200"
+      )}>
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <div className="flex h-14 sm:h-16 items-center justify-between gap-3 sm:gap-4">
             {/* Logo & Branding */}
             <div className="flex items-center gap-2 shrink-0">
-               <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-zinc-950 text-white shadow-lg shadow-zinc-200">
+               <div className={cn(
+                 "flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl shadow-lg transition-colors",
+                 selectedPharmacy === 'HĐ THUOCSI' ? "bg-white text-zinc-950" : "bg-zinc-950 text-white shadow-zinc-200"
+               )}>
                   <Package className="h-4 w-4 sm:h-5 sm:w-5" />
                </div>
             </div>
@@ -335,10 +372,18 @@ export default function App() {
             {/* Central Search Bar */}
             <div className="flex-1 max-w-md flex items-center gap-2">
               <div className="relative group flex-1">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 group-focus-within:text-zinc-950 transition-colors" />
+                <Search className={cn(
+                  "absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transition-colors",
+                  selectedPharmacy === 'HĐ THUOCSI' ? "text-white/40 group-focus-within:text-white" : "text-zinc-400 group-focus-within:text-zinc-950"
+                )} />
                 <Input 
                   placeholder="Tìm đơn, NCC, ghi chú..." 
-                  className="w-full h-9 sm:h-10 rounded-xl sm:rounded-2xl bg-zinc-100/50 border-none pl-8 sm:pl-9 pr-8 focus-visible:ring-zinc-950 focus-visible:bg-white transition-all text-xs sm:text-sm"
+                  className={cn(
+                    "w-full h-9 sm:h-10 rounded-xl sm:rounded-2xl border-none transition-all text-xs sm:text-sm",
+                    selectedPharmacy === 'HĐ THUOCSI' 
+                      ? "bg-white/5 text-white placeholder:text-white/20 focus-visible:ring-white/20 focus-visible:bg-white/10" 
+                      : "bg-zinc-100/50 text-zinc-900 focus-visible:ring-zinc-950 focus-visible:bg-white"
+                  )}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -364,14 +409,20 @@ export default function App() {
               </div>
               
               {/* Realtime Status Indicator */}
-              <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full bg-zinc-100 border border-zinc-200 shadow-sm whitespace-nowrap">
+              <div className={cn(
+                "hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border shadow-sm whitespace-nowrap transition-colors",
+                selectedPharmacy === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "bg-zinc-100 border-zinc-200"
+              )}>
                 <div className={cn(
                   "h-1.5 w-1.5 rounded-full",
                   realtimeStatus === 'connected' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
                   realtimeStatus === 'connecting' ? "bg-amber-500 animate-pulse" : 
                   "bg-rose-500"
                 )} />
-                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-tight">
+                <span className={cn(
+                  "text-[10px] font-bold uppercase tracking-tight",
+                  selectedPharmacy === 'HĐ THUOCSI' ? "text-white/60" : "text-zinc-600"
+                )}>
                   {realtimeStatus === 'connected' ? 'Realtime' : realtimeStatus === 'connecting' ? 'Đang nối...' : 'Lỗi sync'}
                 </span>
               </div>
@@ -383,10 +434,16 @@ export default function App() {
               <Popover>
                 <PopoverTrigger
                   render={
-                    <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-xl hover:bg-zinc-100">
-                      <Bell className="h-4 w-4 text-zinc-600" />
+                    <Button variant="ghost" size="icon" className={cn(
+                      "relative h-9 w-9 rounded-xl transition-colors",
+                      selectedPharmacy === 'HĐ THUOCSI' ? "hover:bg-white/10 text-white" : "hover:bg-zinc-100 text-zinc-600"
+                    )}>
+                      <Bell className="h-4 w-4" />
                       {notifications.some(n => !n.read) && (
-                        <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-rose-500 border-2 border-white shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+                        <span className={cn(
+                          "absolute top-2 right-2 h-2 w-2 rounded-full bg-rose-500 border-2 shadow-[0_0_8px_rgba(244,63,94,0.4)]",
+                          selectedPharmacy === 'HĐ THUOCSI' ? "border-[#020617]" : "border-white"
+                        )} />
                       )}
                     </Button>
                   }
@@ -476,13 +533,12 @@ export default function App() {
 
               {userName && userName.trim().toLowerCase() === 'thuận' && (
                 <Button 
-                  variant="outline" 
-                  size="sm" 
+                  variant="ghost" 
+                  size="icon" 
                   onClick={() => setIsSystemLogsOpen(true)}
-                  className="hidden md:flex h-9 rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors"
+                  className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-700 transition-all border border-amber-500/20"
                 >
-                  <Activity className="h-4 w-4 mr-1.5" />
-                  <span className="text-xs font-bold uppercase tracking-tight">Giám Sát</span>
+                  <Activity className="h-4 w-4" />
                 </Button>
               )}
 
@@ -516,137 +572,193 @@ export default function App() {
           </div>
         </div>
 
-        {/* Dynamic Context Bar: Pharmacies & Status */}
-        <div className="border-t bg-white/50 px-3 py-1.5 sm:px-6 sm:py-2">
-           <div className="mx-auto max-w-7xl flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
-              {/* Pharmacy Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth">
-                {PHARMACIES.map((p) => (
-                  <button
-                    key={p.name}
-                    onClick={() => setSelectedPharmacy(p.name)}
-                    className={cn(
-                      "relative h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap overflow-hidden group",
-                      selectedPharmacy === p.name 
-                        ? "text-white shadow-md shadow-zinc-200" 
-                        : "text-zinc-500 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200"
-                    )}
-                  >
-                    {selectedPharmacy === p.name && (
-                      <div className={cn("absolute inset-0 z-0", p.bg)} />
-                    )}
-                    <span className="relative z-10">{p.name}</span>
-                  </button>
-                ))}
-              </div>
+        <div className={cn(
+          "border-t px-4 py-2 transition-colors duration-500",
+          selectedPharmacy === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "border-zinc-200 bg-white/50"
+        )}>
+          <div className="mx-auto max-w-7xl">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex flex-1 items-center justify-between gap-4 w-full overflow-hidden">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
+                  {PHARMACY_GROUPS[0].pharmacies.map((p) => (
+                    <button
+                      key={p.name}
+                      onClick={() => setSelectedPharmacy(p.name as PharmacyName)}
+                      className={cn(
+                        "relative h-8 px-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap overflow-hidden group",
+                        selectedPharmacy === p.name 
+                          ? "text-white shadow-md shadow-zinc-200" 
+                          : (selectedPharmacy === 'HĐ THUOCSI' ? "text-white/40 hover:text-white bg-white/5 hover:bg-white/10" : "text-zinc-500 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200")
+                      )}
+                    >
+                      {selectedPharmacy === p.name && (
+                        <motion.div 
+                          layoutId="activeTab"
+                          transition={{ type: "tween", duration: 0.15 }}
+                          className={cn("absolute inset-0 z-0", p.bg)} 
+                        />
+                      )}
+                      <span className="relative z-10">{p.name}</span>
+                    </button>
+                  ))}
+                </div>
 
-              {/* Status Filter */}
-              <div className="flex h-8 sm:h-9 items-center gap-1 bg-zinc-100/80 p-1 rounded-xl sm:rounded-2xl self-start sm:self-auto w-full sm:w-auto">
-                {(['all', 'pending', 'completed'] as const).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={cn(
-                      "flex-1 sm:flex-none h-6 sm:h-7 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all",
-                      statusFilter === status 
-                        ? "bg-white text-zinc-950 shadow-sm" 
-                        : "text-zinc-400 hover:text-zinc-600"
-                    )}
-                  >
-                    {status === 'all' ? 'Tất cả' : status === 'pending' ? 'Chờ' : 'Xong'}
-                  </button>
-                ))}
+                {selectedPharmacy !== 'HĐ THUOCSI' && (
+                  <div className="flex h-8 sm:h-9 items-center gap-1 p-1 rounded-xl sm:rounded-2xl shrink-0 bg-zinc-100/80 transition-colors">
+                    {(['all', 'pending', 'completed'] as const).map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => setStatusFilter(status)}
+                        className={cn(
+                          "relative h-6 sm:h-7 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all",
+                          statusFilter === status 
+                            ? "text-zinc-950"
+                            : "text-zinc-400 hover:text-zinc-600"
+                        )}
+                      >
+                        {statusFilter === status && (
+                          <motion.div 
+                            layoutId="activeStatus"
+                            transition={{ type: "tween", duration: 0.15 }}
+                            className="absolute inset-0 bg-white shadow-sm rounded-lg sm:rounded-xl z-0"
+                          />
+                        )}
+                        <span className="relative z-10">
+                          {status === 'all' ? 'Tất cả' : status === 'pending' ? 'Chờ' : 'Xong'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-           </div>
+            </div>
+          </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-32">
-        {/* Content State Handling */}
-        {loading ? (
-          <GridSkeleton viewMode={viewMode} />
-        ) : groupedOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="mb-6 h-20 w-20 rounded-3xl bg-zinc-100 flex items-center justify-center text-zinc-300">
-              <Package className="h-10 w-10" />
-            </div>
-            <h4 className="text-lg font-black text-zinc-900">Không tìm thấy đơn hàng</h4>
-            <p className="mt-1 text-sm text-zinc-500 max-w-xs mx-auto">
-              Không có dữ liệu phù hợp với bộ lọc hiện tại. Thử thay đổi từ khóa hoặc nhà thuốc khác.
-            </p>
-            <Button 
-               className="mt-6 rounded-2xl h-11 px-8 bg-zinc-950 font-bold"
-               onClick={() => setIsUploadOpen(true)}
+      <div className="flex-1 w-full relative grid">
+        <AnimatePresence initial={false}>
+          {selectedPharmacy !== 'HĐ THUOCSI' ? (
+            <motion.main 
+              key={`order-list-${selectedPharmacy}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="col-start-1 row-start-1 w-full mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-32 will-change-opacity"
             >
-               Thêm đơn ngay
-            </Button>
-          </div>
+            {/* Content State Handling */}
+            {loading ? (
+              <GridSkeleton viewMode={viewMode} />
+            ) : groupedOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="mb-6 h-20 w-20 rounded-3xl bg-zinc-100 flex items-center justify-center text-zinc-300">
+                  <Package className="h-10 w-10" />
+                </div>
+                <h4 className="text-lg font-black text-zinc-900">Không tìm thấy đơn hàng</h4>
+                <p className="mt-1 text-sm text-zinc-500 max-w-xs mx-auto">
+                  Không có dữ liệu phù hợp với bộ lọc hiện tại. Thử thay đổi từ khóa hoặc nhà thuốc khác.
+                </p>
+                <Button 
+                  className="mt-6 rounded-2xl h-11 px-8 bg-zinc-950 font-bold"
+                  onClick={() => setIsUploadOpen(true)}
+                >
+                  Thêm đơn ngay
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-12">
+                {groupedOrders.map(([date, dateOrders]) => (
+                  <section key={date} className="space-y-6">
+                    <div className="flex items-center gap-3 sticky top-36 z-30 bg-zinc-50 py-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">
+                        {formatDateHeader(date)}
+                      </h3>
+                      <div className="h-px flex-1 bg-zinc-200" />
+                      <span className="text-[10px] font-black text-zinc-300 bg-white px-2 py-0.5 rounded-full border border-zinc-100 uppercase">
+                        {dateOrders.length} đơn
+                      </span>
+                    </div>
+                    
+                    <motion.div 
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="show"
+                      className={cn(
+                        viewMode === 'grid' 
+                          ? "grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
+                          : "flex flex-col gap-3 sm:gap-4"
+                      )}
+                    >
+                      <AnimatePresence>
+                        {dateOrders.map((order) => (
+                           <OrderCard 
+                             key={order.id} 
+                             order={order} 
+                             viewMode={viewMode} 
+                             variants={itemVariants}
+                           />
+                        ))}
+                      </AnimatePresence>
+                    </motion.div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </motion.main>
         ) : (
-          <div className="space-y-12">
-            {groupedOrders.map(([date, dateOrders]) => (
-              <section key={date} className="space-y-6">
-                <div className="flex items-center gap-3 sticky top-36 z-30 bg-zinc-50 py-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">
-                    {formatDateHeader(date)}
-                  </h3>
-                  <div className="h-px flex-1 bg-zinc-200" />
-                  <span className="text-[10px] font-black text-zinc-300 bg-white px-2 py-0.5 rounded-full border border-zinc-100 uppercase">
-                    {dateOrders.length} đơn
-                  </span>
-                </div>
-                
-                <div className={cn(
-                  viewMode === 'grid' 
-                    ? "grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-                    : "flex flex-col gap-3 sm:gap-4"
-                )}>
-                  <AnimatePresence mode="popLayout">
-                    {dateOrders.map((order) => (
-                      <OrderCard key={order.id} order={order} viewMode={viewMode} />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </section>
-            ))}
-          </div>
+          <motion.main 
+            key="huoctsi-hub"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="col-start-1 row-start-1 w-full flex flex-col will-change-opacity"
+          >
+             <HuoctsiHub />
+          </motion.main>
         )}
-      </main>
+      </AnimatePresence>
+      </div>
 
       {/* Floating Action Menu - Compact & Aesthetic Pill */}
-      <div className="fixed bottom-6 sm:bottom-8 inset-x-0 z-50 flex justify-center pointer-events-none">
-         <div className="pointer-events-auto">
-            <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-               <DialogTrigger
-                 render={
-                  <Button 
-                    className="h-14 pl-2 pr-7 rounded-full bg-zinc-950 text-white hover:bg-black font-black uppercase tracking-[0.2em] text-[10px] flex items-center gap-4 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] border border-white/10 group transition-all active:scale-95 ring-offset-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-950"
-                  >
-                     <div className="h-10 w-10 rounded-full bg-emerald-500 text-zinc-950 flex items-center justify-center shadow-inner group-hover:rotate-90 transition-transform duration-500 ease-out">
-                        <Plus className="h-5 w-5 stroke-[4]" />
-                     </div>
-                     <span className="drop-shadow-sm">Tạo đơn mới</span>
-                  </Button>
-                 }
-               />
-               <DialogContent className="sm:max-w-xl h-full sm:h-[90vh] flex flex-col p-0 overflow-hidden !rounded-none sm:!rounded-3xl border-none">
-                  <div className="p-6 pb-2">
-                     <DialogHeader>
-                        <DialogTitle className="text-xl font-black uppercase tracking-tight">NHẬP TÊN NHÀ CUNG CẤP</DialogTitle>
-                     </DialogHeader>
-                  </div>
-                  <div className="flex-1 overflow-hidden p-6 pt-2">
-                     <UploadForm 
-                        defaultPharmacy={selectedPharmacy} 
-                        userName={userName || 'Người dùng'} 
-                        onSuccess={() => setIsUploadOpen(false)} 
-                     />
-                  </div>
-               </DialogContent>
-            </Dialog>
-         </div>
-      </div>
+      {selectedPharmacy !== 'HĐ THUOCSI' && (
+        <div className="fixed bottom-6 sm:bottom-8 inset-x-0 z-50 flex justify-center pointer-events-none">
+          <div className="pointer-events-auto">
+              <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+                <DialogTrigger
+                  render={
+                    <Button 
+                      className="h-14 pl-2 pr-7 rounded-full bg-zinc-950 text-white hover:bg-black font-black uppercase tracking-[0.2em] text-[10px] flex items-center gap-4 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] border border-white/10 group transition-all active:scale-95 ring-offset-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-950"
+                    >
+                        <div className="h-10 w-10 rounded-full bg-emerald-500 text-zinc-950 flex items-center justify-center shadow-inner group-hover:rotate-90 transition-transform duration-500 ease-out">
+                          <Plus className="h-5 w-5 stroke-[4]" />
+                        </div>
+                        <span className="drop-shadow-sm">Tạo đơn mới</span>
+                    </Button>
+                  }
+                />
+                <DialogContent className="sm:max-w-xl h-full sm:h-[90vh] flex flex-col p-0 overflow-hidden !rounded-none sm:!rounded-3xl border-none">
+                    <div className="p-6 pb-2">
+                      <DialogHeader>
+                          <DialogTitle className="text-xl font-black uppercase tracking-tight">NHẬP TÊN NHÀ CUNG CẤP</DialogTitle>
+                      </DialogHeader>
+                    </div>
+                    <div className="flex-1 overflow-hidden p-6 pt-2">
+                      <UploadForm 
+                          defaultPharmacy={selectedPharmacy} 
+                          userName={userName || 'Người dùng'} 
+                          onSuccess={() => setIsUploadOpen(false)} 
+                          availablePharmacies={PHARMACY_GROUPS[0].pharmacies.filter(p => p.name !== 'HĐ THUOCSI')}
+                      />
+                    </div>
+                </DialogContent>
+              </Dialog>
+          </div>
+        </div>
+      )}
 
       {/* User Name Setup Modal */}
       <Dialog open={isUserPromptOpen} onOpenChange={(open) => {

@@ -116,6 +116,15 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
     toast.success("Đã sao chép kết quả JSON!");
   };
 
+  const handleCopyCell = (text: string | number | undefined | null) => {
+    if (!text && text !== 0) return;
+    const value = text.toString();
+    navigator.clipboard.writeText(value);
+    toast.success(`Đã chép: ${value}`, {
+      duration: 1000,
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false} className="!max-w-none sm:!max-w-none w-screen h-[100dvh] flex flex-col p-0 gap-0 overflow-hidden bg-white border-none !rounded-none pb-0 pt-0 !translate-y-0 !translate-x-0 !top-0 !left-0">
@@ -331,27 +340,119 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                                   <tr key={idx} className="hover:bg-zinc-50 transition-colors bg-white">
                                     {mode === 'SAPO' ? (
                                       <>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.stt}</td>
-                                        <td className="px-4 py-3.5 font-bold text-zinc-900 max-w-[300px] truncate" title={item.ten_san_pham}>{item.ten_san_pham}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.so_lo}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.hsd}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.don_vi}</td>
-                                        <td className="px-4 py-3.5 text-zinc-800 font-bold">{item.sl_nhap}</td>
-                                        <td className="px-4 py-3.5 text-emerald-600 font-mono font-bold tracking-tight">{item.don_gia}</td>
-                                        <td className="px-4 py-3.5 text-zinc-500 font-mono text-xs">{item.chiet_khau}</td>
-                                        <td className="px-4 py-3.5 text-emerald-700 font-mono font-bold tracking-tight bg-emerald-50/30">{item.thanh_tien}</td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.stt)}
+                                        >
+                                          {item.stt}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 font-bold text-zinc-900 max-w-[300px] truncate cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200" 
+                                          title={item.ten_san_pham}
+                                          onClick={() => handleCopyCell(item.ten_san_pham)}
+                                        >
+                                          {item.ten_san_pham}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.so_lo)}
+                                        >
+                                          {item.so_lo}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.hsd)}
+                                        >
+                                          {item.hsd}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.don_vi)}
+                                        >
+                                          {item.don_vi}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-800 font-bold cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.sl_nhap)}
+                                        >
+                                          {item.sl_nhap}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-emerald-600 font-mono font-bold tracking-tight cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.don_gia)}
+                                        >
+                                          {item.don_gia}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-500 font-mono text-xs cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.chiet_khau)}
+                                        >
+                                          {item.chiet_khau}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-emerald-700 font-mono font-bold tracking-tight bg-emerald-50/30 cursor-pointer hover:bg-emerald-100 transition-colors active:bg-emerald-200"
+                                          onClick={() => handleCopyCell(item.thanh_tien)}
+                                        >
+                                          {item.thanh_tien}
+                                        </td>
                                       </>
                                     ) : (
                                       <>
-                                        <td className="px-4 py-3.5 font-bold text-zinc-900 max-w-[250px] truncate" title={item.ten_hh}>{item.ten_hh}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.so_lo}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.hsd}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.dvt}</td>
-                                        <td className="px-4 py-3.5 text-zinc-800 font-bold">{item.sl}</td>
-                                        <td className="px-4 py-3.5 text-blue-600 font-mono font-bold tracking-tight">{item.don_gia_nhap}</td>
-                                        <td className="px-4 py-3.5 text-zinc-500 font-mono text-xs">{item.chiet_khau}</td>
-                                        <td className="px-4 py-3.5 text-zinc-600 font-medium">{item.vat}</td>
-                                        <td className="px-4 py-3.5 text-blue-700 font-mono font-bold tracking-tight bg-blue-50/30">{item.thanh_tien}</td>
+                                        <td 
+                                          className="px-4 py-3.5 font-bold text-zinc-900 max-w-[250px] truncate cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200" 
+                                          title={item.ten_hh}
+                                          onClick={() => handleCopyCell(item.ten_hh)}
+                                        >
+                                          {item.ten_hh}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.so_lo)}
+                                        >
+                                          {item.so_lo}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.hsd)}
+                                        >
+                                          {item.hsd}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.dvt)}
+                                        >
+                                          {item.dvt}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-800 font-bold cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.sl)}
+                                        >
+                                          {item.sl}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-blue-600 font-mono font-bold tracking-tight cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.don_gia_nhap)}
+                                        >
+                                          {item.don_gia_nhap}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-500 font-mono text-xs cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.chiet_khau)}
+                                        >
+                                          {item.chiet_khau}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-zinc-600 font-medium cursor-pointer hover:bg-zinc-100 transition-colors active:bg-zinc-200"
+                                          onClick={() => handleCopyCell(item.vat)}
+                                        >
+                                          {item.vat}
+                                        </td>
+                                        <td 
+                                          className="px-4 py-3.5 text-blue-700 font-mono font-bold tracking-tight bg-blue-50/30 cursor-pointer hover:bg-blue-100 transition-colors active:bg-blue-200"
+                                          onClick={() => handleCopyCell(item.thanh_tien)}
+                                        >
+                                          {item.thanh_tien}
+                                        </td>
                                       </>
                                     )}
                                   </tr>
@@ -370,14 +471,17 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                               <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Tổng cộng thanh toán (Từ Hóa Đơn)</p>
                                 <p className={cn("text-xs font-medium", mode === 'SAPO' ? "text-emerald-700" : "text-blue-700")}>
-                                  Hệ thống đã tự động tìm và trích xuất đúng tổng giá trị thanh toán cuối cùng.
+                                  Hệ thống đã tự động tìm và trích xuất đúng tổng giá trị thanh toán cuối cùng. Nhấp vào số tiền để copy.
                                 </p>
                               </div>
                             </div>
-                            <div className={cn(
-                              "text-2xl font-black font-mono tracking-tighter",
-                              mode === 'SAPO' ? "text-emerald-600" : "text-blue-600"
-                            )}>
+                            <div 
+                              className={cn(
+                                "text-2xl font-black font-mono tracking-tighter cursor-pointer hover:scale-105 transition-transform",
+                                mode === 'SAPO' ? "text-emerald-600" : "text-blue-600"
+                              )}
+                              onClick={() => handleCopyCell(result.total_amount)}
+                            >
                               {result.total_amount} <span className="text-sm">VNĐ</span>
                             </div>
                           </div>

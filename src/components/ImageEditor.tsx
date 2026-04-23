@@ -58,7 +58,7 @@ export function ImageEditor({ file, previewUrl, onSave, onCancel, isOpen }: Imag
         } else {
           onCancel();
         }
-      }, file.type || 'image/jpeg', 1.0);
+      }, file.type || 'image/jpeg', 0.95); // Match the high upload quality (0.95)
     } catch (error) {
       console.error("Error saving edited image", error);
       onCancel();

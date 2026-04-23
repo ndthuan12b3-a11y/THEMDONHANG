@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { PharmacyName, PHARMACIES } from '../types';
+import { PharmacyName, PHARMACIES, PharmacyConfig } from '../types';
 import { ImageEditor } from './ImageEditor';
 import { logUserActivity } from './SystemLogsModal';
 
@@ -16,9 +16,10 @@ interface UploadFormProps {
   defaultPharmacy: PharmacyName;
   userName: string;
   onSuccess: () => void;
+  availablePharmacies: PharmacyConfig[];
 }
 
-export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormProps) {
+export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePharmacies }: UploadFormProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [orderName, setOrderName] = useState('');
   const [supplierHistory, setSupplierHistory] = useState<string[]>([]);
@@ -105,8 +106,8 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            // High-resolution optimization: 2560px (4K-ish) for extreme sharpness in zoom
-            const MAX_SIZE = 2560; 
+            // Ultra-high resolution optimization: 4096px (Professional 4K) for extreme text clarity
+            const MAX_SIZE = 4096; 
             let width = img.width;
             let height = img.height;
 
@@ -120,13 +121,18 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              // Enhanced quality filter to reduce blur marks
+              // Enhanced quality filter
               ctx.imageSmoothingEnabled = true;
               ctx.imageSmoothingQuality = 'high';
+              
+              // Apply a slight contrast & brightness boost to "sharpen" document text automatically
+              // Contrast 115% makes black text on white paper much more defined
+              ctx.filter = 'contrast(115%) brightness(105%)';
+              
               ctx.drawImage(img, 0, 0, width, height);
               canvas.toBlob((blob) => {
                 resolve(blob || file);
-              }, file.type || 'image/jpeg', 0.9); // 0.9 quality for professional archival detail
+              }, file.type || 'image/jpeg', 0.95); // Extremely high quality factor (0.95)
             } else {
               resolve(file);
             }
@@ -195,7 +201,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
     }
 
     setUploading(true);
-    const loadingToast = toast.loading("Đang nén & chuẩn bị tải lên...");
+    const loadingToast = toast.loading("Đang nén & Nâng cao độ nét AI...");
     
     try {
       const uploadedUrls: string[] = [];
@@ -370,11 +376,11 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess }: UploadFormP
           <div className="space-y-2">
             <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">Chọn nhà thuốc</label>
             <div className="flex p-1 bg-zinc-100 rounded-xl gap-1">
-              {PHARMACIES.map((p) => (
+              {availablePharmacies.map((p) => (
                 <button
                   key={p.name}
                   type="button"
-                  onClick={() => setPharmacy(p.name)}
+                  onClick={() => setPharmacy(p.name as PharmacyName)}
                   className={cn(
                     "flex-1 py-2 px-1 rounded-lg text-xs font-bold transition-all",
                     pharmacy === p.name 

@@ -16,7 +16,7 @@ import {
   Maximize2,
   ZoomIn
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Variants } from 'motion/react';
 import { format } from 'date-fns';
 import { supabase } from '../supabase';
 import { toast } from 'sonner';
@@ -41,6 +41,7 @@ import { logUserActivity } from './SystemLogsModal';
 interface OrderCardProps {
   order: Order;
   viewMode: 'grid' | 'list';
+  variants?: Variants;
 }
 
 const DynamicGalleryItem = React.memo(({ url, orderName, index }: { url: string; orderName: string; index: number }) => {
@@ -79,7 +80,7 @@ const DynamicGalleryItem = React.memo(({ url, orderName, index }: { url: string;
   );
 });
 
-export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardProps>(({ order, viewMode }, ref) => {
+export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardProps>(({ order, viewMode, variants }, ref) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
@@ -229,10 +230,9 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
     return (
       <motion.div
         ref={ref}
-        layout
-        initial={{ opacity: 0, x: -20 }}
+        initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+        exit={{ opacity: 0, scale: 0.98 }}
         className={cn(
           "group flex gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-zinc-100 bg-white p-2 sm:p-3 transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
           pharmacyConfig.border
@@ -376,7 +376,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                         "flex-1 rounded-lg text-[10px] h-8 font-bold",
                         editPharmacy === p.name ? "bg-white shadow-sm" : ""
                       )}
-                      onClick={() => setEditPharmacy(p.name)}
+                      onClick={() => setEditPharmacy(p.name as PharmacyName)}
                     >
                       {p.name}
                     </Button>
@@ -405,10 +405,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
   return (
     <motion.div
       ref={ref}
-      layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      variants={variants}
     >
       <Card className={cn(
         "group overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm transition-all hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:border-zinc-200",
@@ -573,7 +570,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                           "flex-1 rounded-lg text-[10px] h-8 font-bold",
                           editPharmacy === p.name ? "bg-white shadow-sm" : ""
                         )}
-                        onClick={() => setEditPharmacy(p.name)}
+                        onClick={() => setEditPharmacy(p.name as PharmacyName)}
                       >
                         {p.name}
                       </Button>
