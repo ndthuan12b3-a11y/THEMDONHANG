@@ -44,8 +44,20 @@ export function ImageEditor({ file, previewUrl, onSave, onCancel, isOpen }: Imag
       const ctx = filterCanvas.getContext('2d');
       
       if (ctx) {
-        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+        // 1. Luôn đổ nền trắng trước để tránh màn hình đen (Trình duyệt JPEG sẽ biến vùng trong suốt thành đen)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, filterCanvas.width, filterCanvas.height);
+
+        // 2. Kiểm tra hỗ trợ filter
+        const supportsFilter = typeof ctx.filter !== 'undefined';
+        if (supportsFilter) {
+          ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+        }
+        
         ctx.drawImage(croppedCanvas, 0, 0);
+        
+        // 3. Reset filter
+        if (supportsFilter) ctx.filter = 'none';
       }
 
       const finalCanvas = ctx ? filterCanvas : croppedCanvas;

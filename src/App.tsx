@@ -82,6 +82,8 @@ export default function App() {
   const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const isAppModalOpen = isUploadOpen || isUserPromptOpen || isSystemLogsOpen;
+
   useEffect(() => {
     // Permission check
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -351,20 +353,19 @@ export default function App() {
       )}
       
       {/* Universal Header - Mobile & Desktop Hybrid */}
-      <header className={cn(
-        "sticky top-0 z-[60] w-full border-b transition-all duration-500",
-        selectedPharmacy === 'HĐ THUOCSI' 
-          ? "bg-[#020617]/80 backdrop-blur-3xl border-white/10 text-white" 
-          : "bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-zinc-200"
-      )}>
+      <AnimatePresence initial={false}>
+      {selectedPharmacy !== 'HĐ THUOCSI' && !isAppModalOpen && (
+      <motion.header 
+        initial={{ y: -100, opacity: 0, height: 0 }}
+        animate={{ y: 0, opacity: 1, height: 'auto' }}
+        exit={{ y: -100, opacity: 0, height: 0 }}
+        className="sticky top-0 z-[60] w-full border-b transition-all duration-500 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-zinc-200 overflow-hidden"
+      >
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <div className="flex h-14 sm:h-16 items-center justify-between gap-3 sm:gap-4">
             {/* Logo & Branding */}
             <div className="flex items-center gap-2 shrink-0">
-               <div className={cn(
-                 "flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl shadow-lg transition-colors",
-                 selectedPharmacy === 'HĐ THUOCSI' ? "bg-white text-zinc-950" : "bg-zinc-950 text-white shadow-zinc-200"
-               )}>
+               <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl shadow-lg transition-colors bg-zinc-950 text-white shadow-zinc-200">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5" />
                </div>
             </div>
@@ -372,18 +373,10 @@ export default function App() {
             {/* Central Search Bar */}
             <div className="flex-1 max-w-md flex items-center gap-2">
               <div className="relative group flex-1">
-                <Search className={cn(
-                  "absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transition-colors",
-                  selectedPharmacy === 'HĐ THUOCSI' ? "text-white/40 group-focus-within:text-white" : "text-zinc-400 group-focus-within:text-zinc-950"
-                )} />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transition-colors text-zinc-400 group-focus-within:text-zinc-950" />
                 <Input 
                   placeholder="Tìm đơn, NCC, ghi chú..." 
-                  className={cn(
-                    "w-full h-9 sm:h-10 rounded-xl sm:rounded-2xl border-none transition-all text-xs sm:text-sm",
-                    selectedPharmacy === 'HĐ THUOCSI' 
-                      ? "bg-white/5 text-white placeholder:text-white/20 focus-visible:ring-white/20 focus-visible:bg-white/10" 
-                      : "bg-zinc-100/50 text-zinc-900 focus-visible:ring-zinc-950 focus-visible:bg-white"
-                  )}
+                  className="w-full h-9 sm:h-10 rounded-xl sm:rounded-2xl border-none transition-all text-xs sm:text-sm bg-zinc-100/50 text-zinc-900 focus-visible:ring-zinc-950 focus-visible:bg-white"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -577,9 +570,10 @@ export default function App() {
           selectedPharmacy === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "border-zinc-200 bg-white/50"
         )}>
           <div className="mx-auto max-w-7xl">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex flex-1 items-center justify-between gap-4 w-full overflow-hidden">
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth py-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
+              {/* Pharmacy Tabs */}
+              <div className="w-full sm:w-auto flex-1 overflow-x-auto no-scrollbar scroll-smooth">
+                <div className="flex items-center gap-1 min-w-max pb-1">
                   {PHARMACY_GROUPS[0].pharmacies.map((p) => (
                     <button
                       key={p.name}
@@ -602,9 +596,10 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {selectedPharmacy !== 'HĐ THUOCSI' && (
-                  <div className="flex h-8 sm:h-9 items-center gap-1 p-1 rounded-xl sm:rounded-2xl shrink-0 bg-zinc-100/80 transition-colors">
+                <div className="w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                  <div className="flex h-8 sm:h-9 items-center gap-1 p-1 rounded-xl sm:rounded-2xl shrink-0 bg-zinc-100/80 transition-colors w-max">
                     {(['all', 'pending', 'completed'] as const).map((status) => (
                       <button
                         key={status}
@@ -629,12 +624,13 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
             </div>
           </div>
         </div>
-      </header>
+      </motion.header>
+      )}
+      </AnimatePresence>
 
       {/* Main Content Area */}
       <div className="flex-1 w-full relative grid">
@@ -717,7 +713,7 @@ export default function App() {
             transition={{ duration: 0.15 }}
             className="col-start-1 row-start-1 w-full flex flex-col will-change-opacity"
           >
-             <HuoctsiHub />
+             <HuoctsiHub onClose={() => setSelectedPharmacy('Hưng Thịnh')} />
           </motion.main>
         )}
       </AnimatePresence>
@@ -725,7 +721,10 @@ export default function App() {
 
       {/* Floating Action Menu - Compact & Aesthetic Pill */}
       {selectedPharmacy !== 'HĐ THUOCSI' && (
-        <div className="fixed bottom-6 sm:bottom-8 inset-x-0 z-50 flex justify-center pointer-events-none">
+        <div className={cn(
+          "fixed bottom-6 sm:bottom-8 inset-x-0 z-50 flex justify-center pointer-events-none transition-all duration-500",
+          isAppModalOpen ? "opacity-0 translate-y-12" : "opacity-100 translate-y-0"
+        )}>
           <div className="pointer-events-auto">
               <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
                 <DialogTrigger
@@ -740,13 +739,13 @@ export default function App() {
                     </Button>
                   }
                 />
-                <DialogContent className="sm:max-w-xl h-full sm:h-[90vh] flex flex-col p-0 overflow-hidden !rounded-none sm:!rounded-3xl border-none">
-                    <div className="p-6 pb-2">
+                <DialogContent className="sm:max-w-xl w-[95vw] sm:w-full max-h-[85vh] flex flex-col p-0 overflow-hidden !rounded-3xl border-none">
+                    <div className="p-4 sm:p-6 pb-2 shrink-0 border-b border-zinc-100">
                       <DialogHeader>
-                          <DialogTitle className="text-xl font-black uppercase tracking-tight">NHẬP TÊN NHÀ CUNG CẤP</DialogTitle>
+                          <DialogTitle className="text-lg sm:text-xl font-black uppercase tracking-tight text-center sm:text-left">NHẬP TÊN NHÀ CUNG CẤP</DialogTitle>
                       </DialogHeader>
                     </div>
-                    <div className="flex-1 overflow-hidden p-6 pt-2">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-4 sm:pt-4 custom-scrollbar">
                       <UploadForm 
                           defaultPharmacy={selectedPharmacy} 
                           userName={userName || 'Người dùng'} 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Package, Image as ImageIcon, Camera, X, Plus, User as UserIcon, Loader2, ChevronRight, Settings2 } from 'lucide-react';
+import { Package, Image as ImageIcon, Camera, X, Plus, User as UserIcon, Loader2, ChevronRight, Settings2, AlertTriangle, Sparkles } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, handleSupabaseError } from '../supabase';
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { PharmacyName, PHARMACIES, PharmacyConfig } from '../types';
 import { ImageEditor } from './ImageEditor';
 import { logUserActivity } from './SystemLogsModal';
+import { checkImageQuality } from '../services/geminiService';
 
 interface UploadFormProps {
   defaultPharmacy: PharmacyName;
@@ -29,6 +30,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   const [note, setNote] = useState('');
   const [uploading, setUploading] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [aiResults, setAiResults] = useState<Record<string, { isScanning: boolean, issues: string[] }>>({});
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   const DEFAULT_SUPPLIERS = ['TỔNG KHO 0907', 'NT TUỆ THIỆN', 'NT HƯNG THỊNH', 'NT PHÚC AN'];
@@ -60,25 +62,16 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   useEffect(() => {
     const input = orderName.trim().toLowerCase();
     
-    // Suggest items when typing OR when the input is empty but field is focused
     const suggestions = supplierHistory
       .filter(name => {
         const nameLower = name.toLowerCase();
         const pharmacyLower = pharmacy.toLowerCase();
-        
-        // 1. Must match input (if input exists)
         if (input && !nameLower.includes(input)) return false;
-        
-        // 2. Exclude the current pharmacy name to avoid redundant entries
-        // (e.g. if ordering AT 'Hưng Thịnh', don't suggest 'NT Hưng Thịnh')
         if (nameLower.includes(pharmacyLower)) return false;
-        
-        // 3. Exclude if it's an exact match of current input
         if (input && nameLower === input) return false;
-        
         return true;
       })
-      .slice(0, 8); // Show up to 8 suggestions
+      .slice(0, 8);
       
     setFilteredSuggestions(suggestions);
   }, [orderName, supplierHistory, pharmacy]);
@@ -106,8 +99,8 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            // Ultra-high resolution optimization: 4096px (Professional 4K) for extreme text clarity
-            const MAX_SIZE = 4096; 
+            // Giảm kích thước xuống 3000px để an toàn hơn cho bộ nhớ RAM của điện thoại đời cũ (Tránh màn hình đen)
+            const MAX_SIZE = 3000; 
             let width = img.width;
             let height = img.height;
 
@@ -120,19 +113,36 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
+            
             if (ctx) {
-              // Enhanced quality filter
+              // 1. Phải đổ nền trắng trước (Tránh đổ nền đen khi vẽ lỗi hoặc file gốc có độ trong suốt)
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, width, height);
+
+              // 2. Kiểm tra hỗ trợ filter để tránh crash/lỗi màn hình đen trên trình duyệt cũ
+              const supportsFilter = typeof ctx.filter !== 'undefined';
+              
               ctx.imageSmoothingEnabled = true;
               ctx.imageSmoothingQuality = 'high';
               
-              // Apply a slight contrast & brightness boost to "sharpen" document text automatically
-              // Contrast 115% makes black text on white paper much more defined
-              ctx.filter = 'contrast(115%) brightness(105%)';
+              if (supportsFilter) {
+                // Chỉ áp dụng filter nếu trình duyệt hỗ trợ (Giảm độ phức tạp để tăng tính tương thích)
+                ctx.filter = 'contrast(1.2) brightness(1.05)';
+              }
               
               ctx.drawImage(img, 0, 0, width, height);
+              
+              // 3. Reset filter sau khi vẽ để không ảnh hưởng các lần vẽ sau
+              if (supportsFilter) ctx.filter = 'none';
+
               canvas.toBlob((blob) => {
-                resolve(blob || file);
-              }, file.type || 'image/jpeg', 0.95); // Extremely high quality factor (0.95)
+                if (!blob) {
+                  console.error("Canvas toBlob null, using original file");
+                  resolve(file);
+                  return;
+                }
+                resolve(blob);
+              }, 'image/jpeg', 0.9); // Quality 0.9 để tối ưu dung lượng
             } else {
               resolve(file);
             }
@@ -149,10 +159,33 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       setFiles(prev => [...prev, ...acceptedFiles]);
+      
       acceptedFiles.forEach(file => {
+        const key = `${file.name}_${file.size}`;
+        setAiResults(prev => ({ ...prev, [key]: { isScanning: true, issues: [] } }));
+        
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviews(prev => [...prev, reader.result as string]);
+        reader.onloadend = async () => {
+          const base64 = reader.result as string;
+          setPreviews(prev => [...prev, base64]);
+          
+          try {
+            // Tạm dừng cực ngắn để UI không bị đơ
+            await new Promise(r => setTimeout(r, 100));
+            // Quét lỗi mờ, lóa bằng Gemini Flash Lite (Chi phí siêu rẻ)
+            const quality = await checkImageQuality(base64);
+            
+            if (!quality.isGood && quality.issues.length > 0) {
+              toast.warning(`Ảnh "${file.name}" có thể bị: ${quality.issues.join(', ')}. Khuyến nghị chụp lại nếu quá mờ.`, {
+                duration: 5000,
+                icon: '⚠️'
+              });
+            }
+            
+            setAiResults(prev => ({ ...prev, [key]: { isScanning: false, issues: quality.issues || [] } }));
+          } catch (e) {
+            setAiResults(prev => ({ ...prev, [key]: { isScanning: false, issues: [] } }));
+          }
         };
         reader.readAsDataURL(file);
       });
@@ -336,32 +369,66 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
 
             {previews.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mt-3 p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
-                {previews.map((src, index) => (
-                  <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    key={index} 
-                    className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 group"
-                  >
-                    <img src={src} alt={`Preview ${index}`} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-[2px]">
-                      <button
-                        type="button"
-                        className="bg-zinc-900/80 text-white rounded-full p-2 hover:bg-emerald-500 transition-colors shadow-lg scale-90 group-hover:scale-100"
-                        onClick={(e) => { e.stopPropagation(); setEditingIndex(index); }}
-                      >
-                         <Settings2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                      className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                {previews.map((src, index) => {
+                  const file = files[index];
+                  const aiKey = file ? `${file.name}_${file.size}` : '';
+                  const aiStatus = aiResults[aiKey];
+
+                  return (
+                    <motion.div 
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      key={index} 
+                      className={cn(
+                        "relative aspect-square overflow-hidden rounded-lg border group",
+                        aiStatus && !aiStatus.isScanning && aiStatus.issues.length > 0 
+                          ? "border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.3)]" 
+                          : "border-zinc-200"
+                      )}
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </motion.div>
-                ))}
+                      <img src={src} alt={`Preview ${index}`} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                      
+                      {/* AI Quality Indicator */}
+                      {aiStatus && (
+                        <div className="absolute top-1 left-1 pointer-events-none">
+                          {aiStatus.isScanning ? (
+                            <div className="bg-black/60 backdrop-blur text-white p-1 rounded-md shadow flex items-center gap-1 border border-white/10">
+                              <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                              <span className="text-[8px] font-bold uppercase tracking-wider">AI Check</span>
+                            </div>
+                          ) : aiStatus.issues.length > 0 ? (
+                            <div className="bg-amber-500/90 backdrop-blur text-white px-1.5 py-0.5 rounded-md shadow flex items-center gap-1 border border-amber-400">
+                              <AlertTriangle className="w-3 h-3" />
+                              <span className="text-[9px] font-bold truncate max-w-[50px]">{aiStatus.issues[0]}</span>
+                            </div>
+                          ) : (
+                            <div className="bg-emerald-500/90 backdrop-blur text-white px-1.5 py-0.5 rounded-md shadow flex items-center gap-1 border border-emerald-400">
+                              <Sparkles className="w-3 h-3" />
+                              <span className="text-[9px] font-bold">Nét</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-[2px]">
+                        <button
+                          type="button"
+                          className="bg-zinc-900/80 text-white rounded-full p-2 hover:bg-emerald-500 transition-colors shadow-lg scale-90 group-hover:scale-100"
+                          onClick={(e) => { e.stopPropagation(); setEditingIndex(index); }}
+                        >
+                           <Settings2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeFile(index); }}
+                        className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </motion.div>
+                  );
+                })}
                 <button 
                   type="button"
                   onClick={openLibrary}

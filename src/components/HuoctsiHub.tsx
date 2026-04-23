@@ -19,7 +19,8 @@ import {
   Calendar,
   FileText,
   Clock,
-  Activity
+  Activity,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'motion/react';
 import { format, isBefore, subDays, startOfDay, parseISO } from 'date-fns';
@@ -73,7 +74,7 @@ const itemVariants: Variants = {
   exit: { opacity: 0, transition: { duration: 0.1 } }
 };
 
-export function HuoctsiHub() {
+export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -94,6 +95,8 @@ export function HuoctsiHub() {
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [formLink, setFormLink] = useState('');
   const [formNote, setFormNote] = useState('');
+
+  const isAnyModalOpen = isFormOpen || isBlacklistOpen || isRecycleBinOpen || isListModalOpen !== null || isAlertOpen;
 
   // Fetch data and setup real-time
   useEffect(() => {
@@ -539,54 +542,66 @@ export function HuoctsiHub() {
         />
       </div>
 
-      <nav className="relative py-6 px-6 backdrop-blur-md bg-black/40 border-b border-white/5">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.1)]">
-              <FileText className="text-blue-400" size={24} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-[18px] font-black uppercase tracking-[0.3em] text-white">HÓA ĐƠN</h1>
+      <div className={cn(
+        "transition-all duration-500",
+        isAnyModalOpen ? "opacity-0 blur-sm pointer-events-none -translate-y-4" : "opacity-100 blur-0 pointer-events-auto translate-y-0"
+      )}>
+        <nav className="relative py-4 px-4 sm:py-6 sm:px-6 backdrop-blur-md bg-black/40 border-b border-white/5">
+          <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
+            <div className="flex items-center gap-4">
+              {onClose && (
+                <button 
+                  onClick={onClose}
+                  className="w-10 h-10 -ml-2 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+              )}
+              <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.1)] shrink-0">
+                <FileText className="text-blue-400" size={24} />
               </div>
-              <p className="text-[11px] text-white/40 font-bold uppercase tracking-widest mt-0.5">{currentPharmacy.replace('NT ', '')}</p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-[18px] font-black uppercase tracking-[0.3em] text-white">HÓA ĐƠN</h1>
+                </div>
+                <p className="text-[11px] text-white/40 font-bold uppercase tracking-widest mt-0.5">{currentPharmacy.replace('NT ', '')}</p>
+              </div>
+            </div>
+
+            <div className="w-full md:w-auto overflow-x-auto no-scrollbar pb-1">
+              <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-xl w-max">
+              {['NT Tuệ Thiện', 'NT Hưng Thịnh', 'NT Phúc An'].map((name, idx) => (
+                <button
+                  key={name}
+                  onClick={() => setCurrentPharmacy(name)}
+                  className={cn(
+                    "px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.1em] transition-all relative group overflow-hidden shrink-0",
+                    currentPharmacy === name 
+                      ? "text-black" 
+                      : "text-white/40 hover:text-white/80 hover:bg-white/5"
+                  )}
+                >
+                  {currentPharmacy === name && (
+                    <motion.div 
+                      layoutId="huoctsiActiveTab"
+                      transition={{ type: "tween", duration: 0.15 }}
+                      className="absolute inset-0 bg-white shadow-[0_0_25px_rgba(255,255,255,0.2)] z-0" 
+                    />
+                  )}
+                  <span className="relative z-10">
+                    {name.replace('NT ', '')}
+                    <span className="hidden md:inline-block ml-1 opacity-40 text-[9px] font-normal tracking-normal group-hover:opacity-60">[{idx + 1}]</span>
+                  </span>
+                </button>
+              ))}
+              </div>
             </div>
           </div>
+        </nav>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-xl">
-            {['NT Tuệ Thiện', 'NT Hưng Thịnh', 'NT Phúc An'].map((name, idx) => (
-              <button
-                key={name}
-                onClick={() => setCurrentPharmacy(name)}
-                className={cn(
-                  "px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.1em] transition-all relative group overflow-hidden",
-                  currentPharmacy === name 
-                    ? "text-black" 
-                    : "text-white/40 hover:text-white/80 hover:bg-white/5"
-                )}
-              >
-                {currentPharmacy === name && (
-                  <motion.div 
-                    layoutId="huoctsiActiveTab"
-                    transition={{ type: "tween", duration: 0.15 }}
-                    className="absolute inset-0 bg-white shadow-[0_0_25px_rgba(255,255,255,0.2)] z-0" 
-                  />
-                )}
-                <span className="relative z-10">
-                  {name.replace('NT ', '')}
-                  <span className="hidden md:inline-block ml-1 opacity-40 text-[9px] font-normal tracking-normal group-hover:opacity-60">[{idx + 1}]</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </nav>
-
-      <main className="max-w-6xl mx-auto px-6 pt-12">
-        {/* Stats Row - Unified with background to prevent leaping */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
+          {/* Stats Row - Unified with background to prevent leaping */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
           {[
             { label: 'Tổng Hóa Đơn', val: stats.total, color: 'text-white', icon: <FileText size={18} />, bg: 'bg-white/5' },
             { label: 'Đã Hoàn Thành', val: stats.completed, color: 'text-emerald-400', icon: <Check size={18} />, bg: 'bg-emerald-500/5' },
@@ -595,7 +610,7 @@ export function HuoctsiHub() {
             <div 
               key={s.label}
               className={cn(
-                "p-8 rounded-[2rem] border border-white/10 backdrop-blur-sm transition-all hover:bg-white/10",
+                "p-6 sm:p-8 rounded-3xl sm:rounded-[2rem] border border-white/10 backdrop-blur-sm transition-all hover:bg-white/10",
                 s.bg
               )}
             >
@@ -603,50 +618,52 @@ export function HuoctsiHub() {
                 <span className="text-white/30">{s.icon}</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{s.label}</span>
               </div>
-              <p className={cn("text-4xl font-jakarta font-black transition-all", s.color)}>{s.val}</p>
+              <p className={cn("text-3xl sm:text-4xl font-jakarta font-black transition-all", s.color)}>{s.val}</p>
             </div>
           ))}
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col lg:flex-row gap-6 mb-16">
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 mb-12 sm:mb-16">
           <div className="relative flex-1 group">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-blue-400 transition-colors" size={20} />
+            <Search className="absolute left-5 sm:left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-blue-400 transition-colors" size={20} />
             <input 
               type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Tìm tên, ghi chú... (F)" 
-              className="w-full bg-white/5 border border-white/10 rounded-[2rem] py-5 px-16 text-[15px] focus:outline-none focus:border-blue-500/40 focus:bg-white/10 transition-all font-medium placeholder:text-white/20"
+              className="w-full bg-white/5 border border-white/10 rounded-[1.5rem] sm:rounded-[2rem] py-4 sm:py-5 px-14 sm:px-16 text-[14px] sm:text-[15px] focus:outline-none focus:border-blue-500/40 focus:bg-white/10 transition-all font-medium placeholder:text-white/20"
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md">
-              {[
-                { id: 'all', label: 'Tất cả' },
-                { id: 'pending', label: 'Chờ' },
-                { id: 'completed', label: 'Xong' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setFilterType(f.id as any)}
-                  className={cn(
-                    "px-6 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all",
-                    filterType === f.id ? "bg-white/10 text-white shadow-inner" : "text-white/30 hover:text-white"
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+          <div className="w-full lg:w-auto overflow-x-auto no-scrollbar pb-1">
+            <div className="flex items-center gap-3 w-max">
+              <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md">
+                {[
+                  { id: 'all', label: 'Tất cả' },
+                  { id: 'pending', label: 'Chờ' },
+                  { id: 'completed', label: 'Xong' }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFilterType(f.id as any)}
+                    className={cn(
+                      "px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all shrink-0",
+                      filterType === f.id ? "bg-white/10 text-white shadow-inner" : "text-white/30 hover:text-white"
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
 
-            <button 
-              onClick={openAddForm}
-              className="bg-blue-600 hover:bg-blue-500 text-white h-full px-8 rounded-2xl text-[12px] font-black uppercase tracking-widest flex items-center gap-3 shadow-xl shadow-blue-600/20 active:scale-95 transition-all"
-            >
-              <Plus size={20} /> Thêm Mới <span className="hidden xl:inline opacity-50">(F2)</span>
-            </button>
+              <button 
+                onClick={openAddForm}
+                className="bg-blue-600 hover:bg-blue-500 text-white h-[44px] sm:h-full px-6 sm:px-8 rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest flex items-center gap-2 sm:gap-3 shadow-xl shadow-blue-600/20 active:scale-95 transition-all shrink-0"
+              >
+                <Plus size={20} /> Thêm Mới <span className="hidden xl:inline opacity-50">(F2)</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -815,7 +832,10 @@ export function HuoctsiHub() {
       </main>
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-10 right-10 flex flex-col gap-5 items-end z-[9000]">
+      <div className={cn(
+        "fixed bottom-10 right-10 flex flex-col gap-5 items-end z-[9000] transition-all duration-500",
+        isAnyModalOpen ? "opacity-0 translate-x-12 pointer-events-none" : "opacity-100 translate-x-0 pointer-events-auto"
+      )}>
         {[
           { icon: <Plus size={24} />, label: 'Thêm mới', hint: '(F2)', onClick: openAddForm, color: 'bg-blue-600' },
           { icon: <Search size={22} />, label: 'Làm mới', hint: '(F5)', onClick: () => fetchInvoices(false), color: 'bg-white/10' },
@@ -845,6 +865,8 @@ export function HuoctsiHub() {
             </button>
           </div>
         ))}
+      </div>
+
       </div>
 
       <AnimatePresence>
@@ -1060,7 +1082,7 @@ function Modal({ children, close, title, variant = "default" }: { children: Reac
         exit={{ scale: 0.9, y: 20 }}
         onClick={e => e.stopPropagation()}
         className={cn(
-          "glass-modal w-full max-w-lg rounded-[2.5rem] p-8 border-t-[4px] relative bg-[#0a0a0a]/80 backdrop-blur-3xl shadow-3xl",
+          "glass-modal w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-3xl sm:rounded-[2.5rem] p-5 sm:p-8 border-t-[4px] relative bg-[#0a0a0a]/80 backdrop-blur-3xl shadow-3xl custom-scrollbar",
           variant === 'amber' ? "border-amber-500" : "border-blue-400"
         )}
       >

@@ -12,6 +12,53 @@ export interface ScanResult {
   total_amount: string;
 }
 
+export interface ImageQualityResult {
+  isGood: boolean;
+  issues: string[]; // e.g. ["Mờ", "Lóa", "Không thấy chữ"]
+}
+
+export const checkImageQuality = async (imageBase64: string): Promise<ImageQualityResult> => {
+  if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
+
+  // Extremely minified schema to save cost
+  const qualitySchema = {
+    type: Type.OBJECT,
+    properties: {
+      g: { type: Type.BOOLEAN },
+      i: { 
+        type: Type.ARRAY,
+        items: { type: Type.STRING }
+      }
+    },
+    required: ["g", "i"]
+  };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite-preview",
+      contents: {
+        parts: [
+          { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] || imageBase64 } },
+          { text: "Check if image is clear and readable for OCR. Return g=true if good. If bad (blurry, glare, unreadable), return g=false and list issues in 'i' (in Vietnamese)." }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: qualitySchema,
+      }
+    });
+
+    const parsed = JSON.parse(response.text);
+    return {
+      isGood: parsed.g,
+      issues: parsed.i || []
+    };
+  } catch (error) {
+    console.error("Gemini Check Quality Error:", error);
+    return { isGood: true, issues: [] }; // Fallback to true if API fails
+  }
+};
+
 export const scanInvoice = async (
   imagesBase64: string[],
   mode: 'SAPO' | 'GPP'
