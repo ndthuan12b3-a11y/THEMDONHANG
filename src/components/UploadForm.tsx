@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { PharmacyName, PHARMACIES, PharmacyConfig } from '../types';
 import { ImageEditor } from './ImageEditor';
 import { logUserActivity } from './SystemLogsModal';
-import { checkImageQuality } from '../services/geminiService';
+import { checkImageQuality, scanInvoice, ScanResult } from '../services/geminiService';
 
 interface UploadFormProps {
   defaultPharmacy: PharmacyName;
@@ -31,7 +31,9 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   const [uploading, setUploading] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
   const [aiResults, setAiResults] = useState<Record<string, { isScanning: boolean, issues: string[] }>>({});
+  const [isScanningAI, setIsScanningAI] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [scanMode, setScanMode] = useState<'SAPO' | 'GPP'>('SAPO');
 
   const DEFAULT_SUPPLIERS = ['TỔNG KHO 0907', 'NT TUỆ THIỆN', 'NT HƯNG THỊNH', 'NT PHÚC AN'];
 
@@ -271,19 +273,20 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
 
       toast.loading("Đang lưu đơn hàng vào hệ thống...", { id: loadingToast });
 
-      // Insert into Supabase table 'orders'
-      const { error: insertError } = await supabase
-        .from('orders')
-        .insert({
-          image_urls: uploadedUrls,
-          order_name: orderName.trim(),
-          sender_name: userName,
-          pharmacy: pharmacy,
-          has_recorded_entry: true,
-          has_recorded_batch_info: true,
-          note: note.trim(),
-          status: 'pending'
-        });
+          // Insert into Supabase table 'orders'
+          const { error: insertError } = await supabase
+            .from('orders')
+            .insert({
+              image_urls: uploadedUrls,
+              order_name: orderName.trim(),
+              sender_name: userName,
+              pharmacy: pharmacy,
+              has_recorded_entry: true,
+              has_recorded_batch_info: true,
+              note: note.trim(),
+              status: 'pending',
+              scan_mode: scanMode
+            });
 
       if (insertError) throw insertError;
 
@@ -326,8 +329,39 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
       </AnimatePresence>
 
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-1 space-y-6 min-h-0 no-scrollbar pb-6 pt-4">
-        <div className="space-y-6">
-          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">Loại Nhập (Phân loại AI)</label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setScanMode('SAPO')}
+                  className={cn(
+                    "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
+                    scanMode === 'SAPO' 
+                      ? "bg-zinc-900 text-white shadow-md shadow-zinc-200" 
+                      : "text-zinc-500 hover:text-zinc-900 bg-transparent"
+                  )}
+                >
+                  <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'SAPO' ? "text-emerald-400" : "text-zinc-400")} />
+                  NHẬP SAPO
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanMode('GPP')}
+                  className={cn(
+                    "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
+                    scanMode === 'GPP' 
+                      ? "bg-[#0F172A] text-white shadow-md shadow-zinc-200" 
+                      : "text-zinc-500 hover:text-zinc-900 bg-transparent"
+                  )}
+                >
+                  <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'GPP' ? "text-blue-400" : "text-zinc-400")} />
+                  NHẬP GPP
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400">Hình Ảnh</label>
               <span className="text-[10px] text-zinc-400 font-medium">Đã chọn: {files.length}</span>
@@ -368,7 +402,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
             </div>
 
             {previews.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 mt-3 p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
+              <div className="grid grid-cols-4 gap-2 mt-4 p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
                 {previews.map((src, index) => {
                   const file = files[index];
                   const aiKey = file ? `${file.name}_${file.size}` : '';
@@ -526,8 +560,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
             <UserIcon className="h-3.5 w-3.5" />
             <span>Được tạo bởi: <strong className="text-zinc-900">{userName}</strong></span>
           </div>
-        </div>
-      </form>
+        </form>
 
       <div className="pt-4 mt-auto border-t border-zinc-100 bg-white left-0 right-0 z-10 p-2 sm:p-0 sm:pt-4">
         <Button 

@@ -13,6 +13,7 @@ export interface Order {
   timestamp: any;
   status?: 'pending' | 'completed';
   completed_at?: any;
+  scan_mode?: 'SAPO' | 'GPP';
 }
 
 export interface PharmacyConfig {

@@ -10,6 +10,12 @@ export interface ScanResult {
   };
   data: any[];
   total_amount: string;
+  invoice_date?: string;
+  invoice_no?: string;
+  tax_code?: string;
+  supplier_name?: string;
+  buyer_name?: string;
+  buyer_tax_code?: string;
 }
 
 export interface ImageQualityResult {
@@ -82,8 +88,7 @@ export const scanInvoice = async (
     throw new Error("GEMINI_API_KEY is not configured. Please add it in the Secrets panel.");
   }
 
-  // Cost-Optimization: Heavily minified schema to save on Output Tokens
-  const minifiedSapoSchema = {
+  const minifiedSchema = {
     type: Type.OBJECT,
     properties: {
       q: {
@@ -95,6 +100,12 @@ export const scanInvoice = async (
         required: ["g"]
       },
       tot: { type: Type.STRING },
+      id: { type: Type.STRING },
+      in: { type: Type.STRING },
+      tx: { type: Type.STRING },
+      sn: { type: Type.STRING },
+      bn: { type: Type.STRING },
+      btx: { type: Type.STRING },
       d: {
         type: Type.ARRAY,
         items: {
@@ -108,43 +119,10 @@ export const scanInvoice = async (
             q: { type: Type.NUMBER },
             p: { type: Type.STRING },
             c: { type: Type.STRING },
-            tt: { type: Type.STRING }
-          },
-          required: ["t", "q", "p", "tt", "l", "h"] // Force l and h
-        }
-      }
-    },
-    required: ["q", "d"]
-  };
-
-  const minifiedGppSchema = {
-    type: Type.OBJECT,
-    properties: {
-      q: {
-        type: Type.OBJECT,
-        properties: {
-          g: { type: Type.BOOLEAN },
-          r: { type: Type.STRING }
-        },
-        required: ["g"]
-      },
-      tot: { type: Type.STRING },
-      d: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            t: { type: Type.STRING },
-            l: { type: Type.STRING },
-            h: { type: Type.STRING },
-            dv: { type: Type.STRING },
-            q: { type: Type.NUMBER },
-            p: { type: Type.STRING },
-            c: { type: Type.STRING },
             v: { type: Type.NUMBER },
             tt: { type: Type.STRING }
           },
-          required: ["t", "q", "p", "tt", "l", "h"] // Force l and h
+          required: ["t", "q", "p", "tt", "l", "h"]
         }
       }
     },
@@ -153,25 +131,21 @@ export const scanInvoice = async (
 
   const systemInstruction = `You are a professional invoice scanner for pharmacies in Vietnam.
 Step 1: Check quality. If bad, set q.g=false and reason in q.r.
-Step 2: If good, extract items based on mode.
+Step 2: If good, extract data based on MODE.
 
 ***CRITICAL RULES***:
-1. YOU MUST EXTRACT 'số lô' (l) AND 'hạn dùng' (h) FOR EVERY SINGLE ITEM. 
+1. ITEM EXTRACTION (d):
+   - YOU MUST EXTRACT 'số lô' (l) AND 'hạn dùng' (h) FOR EVERY SINGLE ITEM. 
    - If not found, output 'N/A'. DO NOT leave blank.
    - HSD format: DD/MM/YYYY. If only month/year or year, convert to DD/MM/YYYY (e.g. 12/2025 -> 01/12/2025).
-2. MODE SAPO: ALWAYS extract the AFTER TAX prices.
-3. MODE GPP: ALWAYS extract the BEFORE TAX prices for unit price and line total. Extract VAT rate.
-4. FINAL TOTAL: Extract the explicitly stated "Tổng cộng" / "Tổng tiền thanh toán" into 'tot'.
+   - MODE SAPO: Prices are AFTER TAX.
+   - MODE GPP: Prices are BEFORE TAX, extract VAT (v) %.
 
-Combine all items in order into the single 'd' array.
+2. HEADER EXTRACTION:
+   - MODE GPP: Extract invoice_date (id), invoice_no (in), tax_code (tx), supplier_name (sn), buyer_name (bn), buyer_tax_code (btx).
+   - MODE SAPO: IGNORE headers (sn, tx, bn, btx). ONLY extract 'tot' (Final Total) and 'id/in' (Date/No) if clearly visible for reference.
 
-MODE SAPO mapping:
-n: stt, t: tên sản phẩm, l: số lô, h: hsd (DD/MM/YYYY), dv: đơn vị, q: số lượng, p: đơn giá, c: chiết khấu, tt: thành tiền.
-Format p and tt: xxx,xxx,xxx (no decimals)
-
-MODE GPP mapping:
-t: tên hàng, l: số lô, h: hsd (DD/MM/YYYY), dv: đơn vị tính, q: số lượng, p: đơn giá nhập, c: chiết khấu, v: vat %, tt: thành tiền.
-Format p and tt: xxx,xxx,xxx.xx (MUST ALWAYS INCLUDE 2 DECIMAL PLACES, e.g., 10,000.00)
+3. FINAL TOTAL: Extract the explicitly stated "Tổng cộng" / "Tổng tiền thanh toán" into 'tot'.
 
 Return valid JSON.`;
 
@@ -184,7 +158,7 @@ Return valid JSON.`;
     }));
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview", // Absolute lowest-cost model
+      model: "gemini-3.1-flash-lite-preview",
       contents: {
         parts: [
           ...imageParts,
@@ -196,7 +170,7 @@ Return valid JSON.`;
       config: {
         systemInstruction,
         responseMimeType: "application/json",
-        responseSchema: mode === 'SAPO' ? minifiedSapoSchema : minifiedGppSchema,
+        responseSchema: minifiedSchema,
       },
     });
 
@@ -237,6 +211,12 @@ Return valid JSON.`;
         reason: minResult.q.r
       },
       total_amount: minResult.tot || "0",
+      invoice_date: minResult.id,
+      invoice_no: minResult.in,
+      tax_code: minResult.tx,
+      supplier_name: minResult.sn,
+      buyer_name: minResult.bn,
+      buyer_tax_code: minResult.btx,
       data: mappedData
     };
 
@@ -245,7 +225,7 @@ Return valid JSON.`;
     console.error("Gemini Scan Error:", error);
     // Intercept 429 Resource Exhausted / Quota Exceeded
     if (error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("exhausted")) {
-      throw new Error("TÀI KHOẢN ĐÃ HẾT TIỀN. Số dư AI đã vượt quá hạn mức 10.000 VNĐ. Vui lòng nạp thêm để tiếp tục.");
+      throw new Error("Hệ thống AI đang quá tải hoặc tạm dừng do hết hạn mức. Vui lòng thử lại sau.");
     }
     throw error;
   }

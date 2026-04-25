@@ -597,6 +597,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
             isOpen={isScanOpen}
             onOpenChange={setIsScanOpen}
             imageUrls={imageUrls}
+            defaultMode={order.scan_mode}
           />
         </CardFooter>
       </Card>
@@ -607,7 +608,8 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
          prev.order.status === next.order.status && 
          prev.viewMode === next.viewMode &&
          prev.order.timestamp === next.order.timestamp &&
-         prev.order.orderName === next.order.orderName;
+         prev.order.orderName === next.order.orderName &&
+         prev.order.scan_mode === next.order.scan_mode;
 });
 
 OrderCard.displayName = "OrderCard";

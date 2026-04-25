@@ -57,10 +57,10 @@ const itemVariants = {
   show: { 
     opacity: 1, 
     y: 0, 
-    transition: { type: "tween", duration: 0.2, ease: "easeOut" }
-  },
+    transition: { type: "spring", duration: 0.2, bounce: 0 }
+  } as const,
   exit: { opacity: 0, transition: { duration: 0.15 } }
-};
+} as const;
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -404,7 +404,7 @@ export default function App() {
               {/* Realtime Status Indicator */}
               <div className={cn(
                 "hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full border shadow-sm whitespace-nowrap transition-colors",
-                selectedPharmacy === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "bg-zinc-100 border-zinc-200"
+                (selectedPharmacy as string) === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "bg-zinc-100 border-zinc-200"
               )}>
                 <div className={cn(
                   "h-1.5 w-1.5 rounded-full",
@@ -414,7 +414,7 @@ export default function App() {
                 )} />
                 <span className={cn(
                   "text-[10px] font-bold uppercase tracking-tight",
-                  selectedPharmacy === 'HĐ THUOCSI' ? "text-white/60" : "text-zinc-600"
+                  (selectedPharmacy as string) === 'HĐ THUOCSI' ? "text-white/60" : "text-zinc-600"
                 )}>
                   {realtimeStatus === 'connected' ? 'Realtime' : realtimeStatus === 'connecting' ? 'Đang nối...' : 'Lỗi sync'}
                 </span>
@@ -429,13 +429,13 @@ export default function App() {
                   render={
                     <Button variant="ghost" size="icon" className={cn(
                       "relative h-9 w-9 rounded-xl transition-colors",
-                      selectedPharmacy === 'HĐ THUOCSI' ? "hover:bg-white/10 text-white" : "hover:bg-zinc-100 text-zinc-600"
+                      (selectedPharmacy as string) === 'HĐ THUOCSI' ? "hover:bg-white/10 text-white" : "hover:bg-zinc-100 text-zinc-600"
                     )}>
                       <Bell className="h-4 w-4" />
                       {notifications.some(n => !n.read) && (
                         <span className={cn(
                           "absolute top-2 right-2 h-2 w-2 rounded-full bg-rose-500 border-2 shadow-[0_0_8px_rgba(244,63,94,0.4)]",
-                          selectedPharmacy === 'HĐ THUOCSI' ? "border-[#020617]" : "border-white"
+                          (selectedPharmacy as string) === 'HĐ THUOCSI' ? "border-[#020617]" : "border-white"
                         )} />
                       )}
                     </Button>
@@ -567,7 +567,7 @@ export default function App() {
 
         <div className={cn(
           "border-t px-4 py-2 transition-colors duration-500",
-          selectedPharmacy === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "border-zinc-200 bg-white/50"
+          (selectedPharmacy as string) === 'HĐ THUOCSI' ? "bg-white/5 border-white/10" : "border-zinc-200 bg-white/50"
         )}>
           <div className="mx-auto max-w-7xl">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
@@ -582,7 +582,7 @@ export default function App() {
                         "relative h-8 px-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap overflow-hidden group",
                         selectedPharmacy === p.name 
                           ? "text-white shadow-md shadow-zinc-200" 
-                          : (selectedPharmacy === 'HĐ THUOCSI' ? "text-white/40 hover:text-white bg-white/5 hover:bg-white/10" : "text-zinc-500 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200")
+                          : ((selectedPharmacy as string) === 'HĐ THUOCSI' ? "text-white/40 hover:text-white bg-white/5 hover:bg-white/10" : "text-zinc-500 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200")
                       )}
                     >
                       {selectedPharmacy === p.name && (
@@ -773,7 +773,73 @@ export default function App() {
                <div className="absolute inset-0 bg-zinc-900/5 group-hover:scale-110 transition-transform" />
                <UserIcon className="h-10 w-10 relative z-10" />
             </div>
-            <div className="space-y-1">
+
+            {/* AI Quota & Renewal Status */}
+            <div className="p-5 bg-zinc-50 border border-zinc-200 rounded-3xl text-left space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`h-2 w-2 rounded-full ${localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'bg-blue-500' : 'bg-emerald-500'} animate-pulse`} />
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    {localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'Chế độ: API Key Cá nhân' : 'Trạng thái hệ thống AI'}
+                  </h4>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full ${localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'} text-[9px] font-black uppercase`}>
+                  {localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'Ưu tiên' : 'Hoạt động'}
+                </span>
+              </div>
+              
+              {!localStorage.getItem('CUSTOM_GEMINI_KEY') ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-end">
+                    <span className="text-[11px] font-bold text-zinc-500">Hạn mức dùng thử:</span>
+                    <span className="text-xs font-black text-zinc-950">~10.000 VNĐ</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 w-[78%] rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
+                  </div>
+                  <p className="text-[10px] text-zinc-400 font-medium leading-tight">
+                    * Bạn đang dùng hạn mức miễn phí của hệ thống.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-2xl">
+                  <p className="text-[10px] text-blue-700 font-bold leading-relaxed">
+                    🚀 Đã kích hoạt API Key cá nhân. Bạn đang sử dụng hạn mức riêng từ Google AI Studio, không bị ảnh hưởng bởi hạn mức 10k của hệ thống.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-zinc-200 space-y-3">
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                   {localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'Quản lý API Key' : 'Tự Gia hạn (Dùng vĩnh viễn)'}
+                 </h4>
+                 <div className="space-y-2">
+                    <p className="text-[10px] text-zinc-600 leading-normal font-medium">
+                      Lấy <strong>API KEY</strong> tại <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-600 font-bold underline hover:text-emerald-700">Google AI Studio</a>:
+                    </p>
+                    <Input 
+                      type="password"
+                      placeholder="Dán API Key của bạn..."
+                      className="h-9 text-[11px] rounded-xl bg-white border-zinc-200 focus-visible:ring-emerald-500"
+                      onChange={(e) => {
+                        const key = e.target.value.trim();
+                        if (key.length > 20) {
+                          localStorage.setItem('CUSTOM_GEMINI_KEY', key);
+                          toast.success("✅ Đã kích hoạt API Key riêng!");
+                          setTimeout(() => window.location.reload(), 1000);
+                        } else if (key.length === 0) {
+                          localStorage.removeItem('CUSTOM_GEMINI_KEY');
+                          toast.info("Đã quay lại hạn mức dùng chung.");
+                          setTimeout(() => window.location.reload(), 1000);
+                        }
+                      }}
+                      defaultValue={localStorage.getItem('CUSTOM_GEMINI_KEY') || ''}
+                    />
+                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-1 text-center">
               <h3 className="text-lg font-bold text-zinc-900">Tên người xử lý đơn</h3>
               <p className="text-sm text-zinc-400 font-medium">Tên này sẽ được gán làm "Người gửi" cho tất cả đơn hàng bạn tải lên.</p>
             </div>

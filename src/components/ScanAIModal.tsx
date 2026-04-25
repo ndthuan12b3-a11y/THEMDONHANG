@@ -19,12 +19,45 @@ interface ScanAIModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   imageUrls: string[];
+  defaultMode?: 'SAPO' | 'GPP';
 }
 
-export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, imageUrls }) => {
-  const [mode, setMode] = useState<'SAPO' | 'GPP'>('SAPO');
+export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, imageUrls, defaultMode = 'SAPO' }) => {
+  const [mode, setMode] = useState<'SAPO' | 'GPP'>(defaultMode);
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+
+  // Sync mode when defaultMode changes (e.g. order changed while modal open)
+  React.useEffect(() => {
+    if (isOpen) {
+      setMode(defaultMode);
+    }
+  }, [defaultMode, isOpen]);
+
+  const checkPotentialDuplicate = async (newResult: ScanResult): Promise<ScanResult | null> => {
+    if (!newResult.invoice_no || !newResult.supplier_name) return null;
+
+    try {
+      // Tìm kiếm trong Cloud Cache các bản ghi có số hóa đơn và tên NCC khớp
+      const { data, error } = await supabase
+        .from('ai_scan_cache')
+        .select('result')
+        .contains('result', { 
+          invoice_no: newResult.invoice_no, 
+          supplier_name: newResult.supplier_name 
+        })
+        .limit(1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        return data[0].result as ScanResult;
+      }
+    } catch (err) {
+      console.error("Duplicate Check Error:", err);
+    }
+    return null;
+  };
 
   const handleScan = async (forceRescan: boolean = false) => {
     try {
@@ -39,18 +72,26 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
           .maybeSingle();
 
         if (cloudCached) {
-          setResult(cloudCached.result);
-          toast.info("⚡ Tải kết quả từ Cloud Cache (Đồng bộ 0đ)");
-          logUserActivity('Quét AI (Cloud)', `Sử dụng kết quả đồng bộ cho chế độ ${mode}`);
+          const cloudResult = cloudCached.result as ScanResult;
+          const dup = await checkPotentialDuplicate(cloudResult);
+          const finalResult = dup || cloudResult;
+          
+          setResult(finalResult);
+          toast.info(dup ? "⚡ Tải dữ liệu từ hóa đơn đã tồn tại (Trùng lặp)" : "⚡ Tải kết quả từ Cloud Cache (Đồng bộ 0đ)");
+          logUserActivity('Quét AI (Cloud)', `Sử dụng kết quả đồng bộ cho chế độ ${mode}${dup ? ' - Phát hiện trùng' : ''}`);
           return;
         }
 
         // 2. Fallback to Local Cache
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
-          setResult(JSON.parse(cached));
-          toast.info("Đã tải kết quả từ Bộ Nhớ Đệm (Miễn phí API)");
-          logUserActivity('Quét AI (Cache)', `Sử dụng chế độ ${mode} bằng dữ liệu lưu trữ tạm`);
+          const cachedResult = JSON.parse(cached) as ScanResult;
+          const dup = await checkPotentialDuplicate(cachedResult);
+          const finalResult = dup || cachedResult;
+
+          setResult(finalResult);
+          toast.info(dup ? "⚡ Tải dữ liệu từ hóa đơn đã tồn tại (Trùng lặp)" : "Đã tải kết quả từ Bộ Nhớ Đệm (Miễn phí API)");
+          logUserActivity('Quét AI (Cache)', `Sử dụng chế độ ${mode} bằng dữ liệu lưu trữ tạm${dup ? ' - Phát hiện trùng' : ''}`);
           return;
         }
       }
@@ -74,37 +115,36 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
       
       // 2. Save to Cache on success
       if (scanResult.quality.isGood) {
+        const dup = await checkPotentialDuplicate(scanResult);
+        const finalResult = dup || scanResult;
+
         // Save Local
-        localStorage.setItem(cacheKey, JSON.stringify(scanResult));
+        localStorage.setItem(cacheKey, JSON.stringify(finalResult));
         
         // Save Cloud (Sync for everyone)
         await supabase.from('ai_scan_cache').upsert({
           cache_key: cacheKey,
-          result: scanResult
+          result: finalResult
         });
 
-        toast.success("Quét AI thành công!");
-        logUserActivity('Quét AI (API)', `Sử dụng Gemini bóc tách hóa đơn ở chế độ ${mode}`);
+        toast.success(dup ? "✅ Đã tự động lấy lại dữ liệu từ hóa đơn trùng lặp" : "Quét AI thành công!");
+        logUserActivity('Quét AI (API)', `Sử dụng Gemini bóc tách hóa đơn ở chế độ ${mode}${dup ? ' - PHÁT HIỆN TRÙNG' : ''}`);
+        setResult(finalResult);
       } else {
         toast.warning(`Chất lượng ảnh thấp: ${scanResult.quality.reason}`);
         logUserActivity('Quét AI (Thất bại)', `Ảnh chất lượng thấp: ${scanResult.quality.reason}`);
+        setResult(scanResult);
       }
-      setResult(scanResult);
       
     } catch (error: any) {
       console.error(error);
-      const isQuotaError = error.message?.includes("TÀI KHOẢN ĐÃ HẾT TIỀN") || error.message?.toLowerCase().includes("quota");
-      
-      if (isQuotaError) {
-        toast.error("Hết hạn mức AI: Vui lòng nạp thêm tiền!", { duration: 10000 });
-        setResult({
-          quality: { isGood: false, reason: "HẾT HẠN MỨC SỬ DỤNG: Số dư AI API của hệ thống đã cạn (Vượt 10.000 VNĐ). Vui lòng nạp thêm tiền mã API_KEY để tiếp tục." },
-          data: [],
-          total_amount: "0"
-        });
-      } else {
-        toast.error("Lỗi khi quét AI: " + (error.message || "Đã xảy ra lỗi"));
-      }
+      const msg = error.message || "Đã xảy ra lỗi không xác định";
+      toast.error(`Lỗi AI: ${msg}`);
+      setResult({
+        quality: { isGood: false, reason: `Lỗi kết nối AI: ${msg}` },
+        data: [],
+        total_amount: "0"
+      });
     } finally {
       setIsScanning(false);
     }
@@ -297,6 +337,48 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                             <p className="text-orange-900 font-bold text-sm uppercase">Phát hiện ảnh mờ / Không đạt</p>
                             <p className="text-orange-700 text-sm mt-1 leading-relaxed">{result.quality.reason}</p>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Invoice Info Summary - Only show in GPP or if it's a rescan with data */}
+                      {mode === 'GPP' && (result.invoice_date || result.invoice_no || result.tax_code || result.supplier_name || result.buyer_name || result.buyer_tax_code) && (
+                        <div className="mx-4 mt-4 p-4 bg-white border border-zinc-200 rounded-xl grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 shadow-sm">
+                          {result.supplier_name && (
+                            <div className="space-y-1 group cursor-pointer" onClick={() => handleCopyCell(result.supplier_name)}>
+                              <p className="text-[10px] font-black uppercase text-zinc-400 group-hover:text-emerald-500 transition-colors">Đơn vị bán</p>
+                              <p className="text-sm font-bold text-zinc-900 truncate" title={result.supplier_name}>{result.supplier_name}</p>
+                            </div>
+                          )}
+                          {result.tax_code && (
+                            <div className="space-y-1 group cursor-pointer" onClick={() => handleCopyCell(result.tax_code)}>
+                              <p className="text-[10px] font-black uppercase text-zinc-400 group-hover:text-emerald-500 transition-colors">MST Người bán</p>
+                              <p className="text-sm font-bold text-zinc-900">{result.tax_code}</p>
+                            </div>
+                          )}
+                          {result.buyer_name && (
+                            <div className="space-y-1 group cursor-pointer" onClick={() => handleCopyCell(result.buyer_name)}>
+                              <p className="text-[10px] font-black uppercase text-zinc-400 group-hover:text-emerald-500 transition-colors">Đơn vị mua</p>
+                              <p className="text-sm font-bold text-zinc-900 truncate" title={result.buyer_name}>{result.buyer_name || 'N/A'}</p>
+                            </div>
+                          )}
+                          {result.buyer_tax_code && (
+                            <div className="space-y-1 group cursor-pointer" onClick={() => handleCopyCell(result.buyer_tax_code)}>
+                              <p className="text-[10px] font-black uppercase text-zinc-400 group-hover:text-emerald-500 transition-colors">MST Người mua</p>
+                              <p className="text-sm font-bold text-zinc-900">{result.buyer_tax_code || 'N/A'}</p>
+                            </div>
+                          )}
+                          {result.invoice_date && (
+                            <div className="space-y-1 group cursor-pointer" onClick={() => handleCopyCell(result.invoice_date)}>
+                              <p className="text-[10px] font-black uppercase text-zinc-400 group-hover:text-emerald-500 transition-colors">Ngày HĐ</p>
+                              <p className="text-sm font-bold text-zinc-900">{result.invoice_date}</p>
+                            </div>
+                          )}
+                          {result.invoice_no && (
+                            <div className="space-y-1 group cursor-pointer" onClick={() => handleCopyCell(result.invoice_no)}>
+                              <p className="text-[10px] font-black uppercase text-zinc-400 group-hover:text-emerald-500 transition-colors">Số hóa đơn</p>
+                              <p className="text-sm font-bold text-zinc-900">{result.invoice_no}</p>
+                            </div>
+                          )}
                         </div>
                       )}
 
