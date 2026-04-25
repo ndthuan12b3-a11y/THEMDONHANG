@@ -273,20 +273,32 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
 
       toast.loading("Đang lưu đơn hàng vào hệ thống...", { id: loadingToast });
 
-          // Insert into Supabase table 'orders'
-          const { error: insertError } = await supabase
-            .from('orders')
-            .insert({
-              image_urls: uploadedUrls,
-              order_name: orderName.trim(),
-              sender_name: userName,
-              pharmacy: pharmacy,
-              has_recorded_entry: true,
-              has_recorded_batch_info: true,
-              note: note.trim(),
-              status: 'pending',
-              scan_mode: scanMode
-            });
+      // Insert into Supabase table 'orders'
+      const orderPayload = {
+        image_urls: uploadedUrls,
+        order_name: orderName.trim(),
+        sender_name: userName,
+        pharmacy: pharmacy,
+        has_recorded_entry: true,
+        has_recorded_batch_info: true,
+        note: note.trim(),
+        status: 'pending',
+        scan_mode: scanMode
+      };
+
+      let { error: insertError } = await supabase
+        .from('orders')
+        .insert(orderPayload);
+
+      // Handle missing 'scan_mode' column error (PGRST204)
+      if (insertError && (insertError.code === 'PGRST204' || insertError.message?.includes('scan_mode'))) {
+        console.warn("Scan mode column not found in database. Retrying without it...");
+        const { scan_mode, ...legacyPayload } = orderPayload;
+        const { error: retryError } = await supabase
+          .from('orders')
+          .insert(legacyPayload);
+        insertError = retryError;
+      }
 
       if (insertError) throw insertError;
 
