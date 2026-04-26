@@ -577,13 +577,13 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex flex-col gap-2 p-4 pt-0">
-          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-100 mt-0 w-full">
+        <CardFooter className="flex flex-col gap-2 p-3 sm:p-4 pt-0">
+          <div className="flex flex-nowrap items-center gap-1 sm:gap-1.5 pt-2 border-t border-zinc-100 mt-0 w-full overflow-hidden">
             {(order.scan_mode) && (
               <Button 
                 size="sm" 
                 className={cn(
-                  "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1 min-w-[70px]",
+                  "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1",
                   (order.scan_mode === 'SAPO')
                     ? "bg-emerald-600 text-white hover:bg-emerald-700" 
                     : "bg-red-600 text-white hover:bg-red-700"
@@ -597,34 +597,34 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                   }
                 }}
               >
-                <Sparkles className="h-3 w-3" />
-                <span>{order.scan_mode}</span>
+                <Sparkles className="h-3 w-3 shrink-0" />
+                <span className="truncate">{order.scan_mode}</span>
               </Button>
             )}
             <Button 
               size="sm" 
               className={cn(
-                "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1 min-w-[80px]",
+                "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1",
                 order.status === 'completed' 
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
                   : "bg-white border border-zinc-200 text-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
               )}
               onClick={handleToggleComplete}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {order.status === 'completed' ? "Đã xong" : "Xong"}
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{order.status === 'completed' ? "Xong" : "Xong"}</span>
             </Button>
             <Button 
               size="sm" 
               variant="outline"
-              className="h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight text-zinc-900 border border-zinc-200 hover:bg-zinc-100 hover:border-zinc-400 bg-white shadow-sm flex-1 min-w-[50px]"
+              className="h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight text-zinc-900 border border-zinc-200 hover:bg-zinc-100 hover:border-zinc-400 bg-white shadow-sm flex-1"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
               }}
             >
-              <RotateCw className="h-3.5 w-3.5" />
-              Sửa
+              <RotateCw className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Sửa</span>
             </Button>
           </div>
 

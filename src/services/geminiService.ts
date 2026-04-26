@@ -1,7 +1,31 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const API_KEY = process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
+const getAPIKey = () => process.env.GEMINI_API_KEY;
+
+let aiClient: any = null;
+const getAI = () => {
+  if (!aiClient) {
+    const key = getAPIKey();
+    if (!key) throw new Error("GEMINI_API_KEY is not configured. Please add it in the Secrets panel.");
+    aiClient = new GoogleGenAI({ apiKey: key });
+  }
+  return aiClient;
+};
+
+/**
+ * Robustly extract text from Gemini response candidates
+ */
+const extractText = (response: any): string => {
+  if (typeof response.text === 'string') return response.text;
+  if (typeof response.text === 'function') return response.text();
+  
+  const candidate = response.candidates?.[0];
+  const part = candidate?.content?.parts?.[0];
+  if (part?.text) return part.text;
+  
+  console.error("Unknown response structure:", JSON.stringify(response, null, 2));
+  throw new Error("Could not extract text from AI response.");
+};
 
 const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 3, initialDelay = 1000): Promise<T> => {
   let lastError: any;
@@ -49,8 +73,6 @@ export interface ImageQualityResult {
 }
 
 export const checkImageQuality = async (imageBase64: string): Promise<ImageQualityResult> => {
-  if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
-
   const qualitySchema = {
     type: Type.OBJECT,
     properties: {
@@ -79,6 +101,7 @@ Trả về JSON:
 
 HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả về false.`;
 
+  const ai = getAI();
   try {
     const response = await withRetry(() => ai.models.generateContent({
       model: "gemini-3.1-flash-lite-preview",
@@ -94,7 +117,7 @@ HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả
       }
     }));
 
-    const parsed = JSON.parse(response.text);
+    const parsed = JSON.parse(extractText(response));
     return {
       isGood: parsed.g,
       issues: parsed.i || []
@@ -109,10 +132,7 @@ export const scanInvoice = async (
   imagesBase64: string[],
   mode: 'SAPO' | 'GPP'
 ): Promise<ScanResult> => {
-  if (!API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured. Please add it in the Secrets panel.");
-  }
-
+  const ai = getAI();
   const minifiedSchema = {
     type: Type.OBJECT,
     properties: {
@@ -163,10 +183,15 @@ Step 2: If good, extract data based on MODE.
    - YOU MUST EXTRACT 'số lô' (l) AND 'hạn dùng' (h) FOR EVERY SINGLE ITEM. 
    - If not found, output 'N/A'. DO NOT leave blank.
    - HSD format: DD/MM/YYYY. If only month/year or year, convert to DD/MM/YYYY (e.g. 12/2025 -> 01/12/2025).
-   - MODE SAPO: Prices are AFTER TAX.
-   - MODE GPP: Prices are BEFORE TAX, extract VAT (v) %.
-
-2. HEADER EXTRACTION:
+   - MODE SAPO: 
+     * Prices (p) MUST be AFTER TAX (Giá sau thuế). 
+     * Format (p): Extract exactly as "xxx,xxx,xxx" (integer string with comma separators).
+   - MODE GPP: 
+     * Prices (p) MUST be BEFORE TAX (Giá trước thuế).
+     * Format (p): Extract exactly as "xxx,xxx,xxx.xx" (string with comma separators for thousands and dot for decimal).
+     * Extract VAT (v) as a percentage number (e.g. 5, 8, 10).
+2. PRECISION: Ensure unit quantities (q) and unit prices (p) are exactly as printed. Do not round numbers.
+3. HEADER EXTRACTION:
    - MODE GPP: Extract invoice_date (id), invoice_no (in), tax_code (tx), supplier_name (sn), buyer_name (bn), buyer_tax_code (btx).
    - MODE SAPO: IGNORE headers (sn, tx, bn, btx). ONLY extract 'tot' (Final Total) and 'id/in' (Date/No) if clearly visible for reference.
 
@@ -188,7 +213,7 @@ Return valid JSON.`;
         parts: [
           ...imageParts,
           {
-            text: `Scan invoice MODE ${mode}. Merge all pages into 'd'.`,
+            text: `Scan invoice MODE ${mode}. Merge all pages into 'd'. Extract all unit prices as raw numeric strings.`,
           },
         ],
       },
@@ -199,7 +224,7 @@ Return valid JSON.`;
       },
     }));
 
-    const minResult = JSON.parse(response.text);
+    const minResult = JSON.parse(extractText(response));
 
     // Inflate minified result back to standard ScanResult format for Frontend
     const mappedData = minResult.d.map((item: any) => {
@@ -263,7 +288,7 @@ Return valid JSON.`;
 
     // Intercept 429 Resource Exhausted / Quota Exceeded
     if (error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("exhausted")) {
-      throw new Error("Hệ thống AI đang tạm dừng do hết hạn mức. Vui lòng thử lại sau.");
+      throw new Error("Tài khoản AI đang tạm dừng do giới hạn API. Nếu bạn dùng API Key cá nhân, vui lòng kiểm tra lại hạn mức trên Google Cloud.");
     }
     throw error;
   }
