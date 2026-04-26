@@ -99,6 +99,34 @@ export default function App() {
 
   // Load User Name
   useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        
+        if (error) throw error;
+        
+        setNotifications((data || []).map(n => ({
+          id: n.id,
+          title: n.title,
+          body: n.body,
+          time: new Date(n.created_at),
+          read: n.read
+        })));
+      } catch (err: any) {
+        if (err.message?.includes('schema cache')) {
+          console.warn('⚠️ LƯU Ý: Bảng "notifications" chưa được tạo trong Supabase. Vui lòng chạy SQL trong supabase_setup.sql');
+        } else {
+          console.error("Lỗi khi tải thông báo:", err);
+        }
+      }
+    };
+
+    fetchNotifications();
+
     const savedName = localStorage.getItem('order_tracker_user_name');
     if (savedName) {
       setUserName(savedName);
@@ -204,18 +232,6 @@ export default function App() {
         if (payload.eventType === 'INSERT') {
           const newOrder = payload.new;
           
-          // Add to hub
-          setNotifications(prev => [
-            {
-              id: Math.random().toString(36).substr(2, 9),
-              title: 'CÓ ĐƠN HÀNG MỚI',
-              body: `${newOrder.sender_name} gửi: ${newOrder.order_name}`,
-              time: new Date(),
-              read: false
-            },
-            ...prev
-          ].slice(0, 20));
-
           // Sound
           if (audioRef.current) {
             audioRef.current.play().catch(e => console.log('Audio play failed:', e));
@@ -232,6 +248,30 @@ export default function App() {
               icon: "/favicon.ico"
             });
           }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
+        console.log('🔔 Notification change detected!', payload.eventType);
+        if (payload.eventType === 'INSERT') {
+           const n = payload.new;
+           setNotifications(prev => [
+             {
+               id: n.id,
+               title: n.title,
+               body: n.body,
+               time: new Date(n.created_at),
+               read: n.read
+             },
+             ...prev
+           ].slice(0, 50));
+        } else if (payload.eventType === 'UPDATE') {
+           const updatedNotif = payload.new;
+           setNotifications(prev => prev.map(n => 
+             n.id === updatedNotif.id ? { ...n, read: updatedNotif.read } : n
+           ));
+        } else if (payload.eventType === 'DELETE') {
+           const deletedId = payload.old.id;
+           setNotifications(prev => prev.filter(n => n.id !== deletedId));
         }
       })
       .subscribe((status, err) => {
@@ -447,7 +487,21 @@ export default function App() {
                     <h4 className="text-xs font-black uppercase tracking-widest text-zinc-950">Thông báo</h4>
                     {notifications.length > 0 && (
                       <button 
-                        onClick={() => setNotifications(prev => prev.map(n => ({...n, read: true})))}
+                        onClick={async () => {
+                          const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+                          if (unreadIds.length === 0) return;
+                          
+                          try {
+                            const { error } = await supabase
+                              .from('notifications')
+                              .update({ read: true })
+                              .in('id', unreadIds);
+                            
+                            if (error) throw error;
+                          } catch (err) {
+                            toast.error("Không thể cập nhập trạng thái thông báo");
+                          }
+                        }}
                         className="text-[10px] font-bold text-zinc-500 hover:text-zinc-950 transition-colors"
                       >
                         Đánh dấu đã đọc
@@ -464,7 +518,22 @@ export default function App() {
                       </div>
                     ) : (
                       notifications.map((n) => (
-                        <div key={n.id} className={cn("p-4 border-b border-zinc-50 hover:bg-zinc-50 transition-colors relative", !n.read && "bg-emerald-50/30")}>
+                        <button 
+                          key={n.id} 
+                          onClick={async () => {
+                            if (n.read) return;
+                            try {
+                              const { error } = await supabase
+                                .from('notifications')
+                                .update({ read: true })
+                                .eq('id', n.id);
+                              if (error) throw error;
+                            } catch (err) {
+                              console.error("Lỗi khi cập nhật thông báo:", err);
+                            }
+                          }}
+                          className={cn("w-full p-4 border-b border-zinc-50 hover:bg-zinc-50 transition-colors relative block cursor-pointer", !n.read && "bg-emerald-50/30 font-bold")}
+                        >
                           <div className="flex gap-3">
                             <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", !n.read ? "bg-emerald-100 text-emerald-600" : "bg-zinc-100 text-zinc-400")}>
                                <Package className="h-4 w-4" />
@@ -476,7 +545,7 @@ export default function App() {
                             </div>
                             {!n.read && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />}
                           </div>
-                        </div>
+                        </button>
                       ))
                     )}
                   </div>

@@ -29,6 +29,31 @@ async function startServer() {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async (payload: any) => {
           const order = payload.new;
           console.log('New Order detected via Supabase Backend Listener:', order.order_name);
+          
+          // Automatically create a notification record when a new order is placed
+          try {
+            const { error: notifError } = await supabaseAdmin
+              .from('notifications')
+              .insert([
+                {
+                  title: 'CÓ ĐƠN HÀNG MỚI',
+                  body: `${order.sender_name} gửi: ${order.order_name}`,
+                  read: false
+                }
+              ]);
+            
+            if (notifError) {
+              if (notifError.message.includes('schema cache')) {
+                console.warn('⚠️ LƯU Ý: Bảng "notifications" chưa tồn tại trong Supabase. Vui lòng chạy nội dung file supabase_setup.sql trong Supabase SQL Editor.');
+              } else {
+                console.error('Failed to create notification record:', notifError.message);
+              }
+            } else {
+              console.log('Notification record created successfully for order:', order.id);
+            }
+          } catch (err) {
+            console.error('Error during auto-notification creation:', err);
+          }
         });
 
       channel.subscribe((status: string, err: any) => {

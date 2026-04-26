@@ -1,23 +1,48 @@
--- Create medx_invoices table
-create table if not exists medx_invoices (
+-- Create orders table if not exists (App.tsx depends on this)
+create table if not exists orders (
   id uuid default gen_random_uuid() primary key,
-  name text not null,
-  date date not null,
-  link text,
-  note text,
+  order_name text not null,
+  sender_name text not null,
   pharmacy text not null,
-  completed boolean default false,
-  is_deleted boolean default false,
-  ever_blacklisted boolean default false,
+  image_urls text[] default array[]::text[],
+  note text,
+  status text default 'pending',
+  has_recorded_entry boolean default false,
+  has_recorded_batch_info boolean default false,
+  scan_mode text,
   created_at timestamp with time zone default timezone('utc'::text, now()),
-  deleted_at timestamp with time zone
+  completed_at timestamp with time zone
+);
+
+-- Create notifications table
+create table if not exists notifications (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  body text not null,
+  read boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Create activity_logs table
+create table if not exists activity_logs (
+  id uuid default gen_random_uuid() primary key,
+  user_name text not null,
+  action text not null,
+  details text,
+  created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
 -- Enable RLS
-alter table medx_invoices enable row level security;
+alter table orders enable row level security;
+alter table notifications enable row level security;
+alter table activity_logs enable row level security;
 
--- Create policies (Public for now as requested or implied by the legacy setup)
-create policy "Enable all access for everyone" on medx_invoices for all using (true);
+-- Create policies
+create policy "Enable all access for everyone" on orders for all using (true);
+create policy "Enable all access for everyone" on notifications for all using (true);
+create policy "Enable all access for everyone" on activity_logs for all using (true);
 
 -- Enable Realtime
-alter publication supabase_realtime add table medx_invoices;
+alter publication supabase_realtime add table orders;
+alter publication supabase_realtime add table notifications;
+alter publication supabase_realtime add table activity_logs;
