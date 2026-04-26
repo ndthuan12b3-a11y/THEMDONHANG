@@ -292,8 +292,10 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
 
       // Handle missing 'scan_mode' column error (PGRST204)
       if (insertError && (insertError.code === 'PGRST204' || insertError.message?.includes('scan_mode'))) {
-        console.warn("Scan mode column not found in database. Retrying without it...");
+        console.warn("Scan mode column not found in database. Retrying with mode in notes...");
         const { scan_mode, ...legacyPayload } = orderPayload;
+        // Prepend to note for permanent visibility
+        legacyPayload.note = `[NHẬP ${scan_mode.toUpperCase()}]\n${legacyPayload.note}`;
         const { error: retryError } = await supabase
           .from('orders')
           .insert(legacyPayload);
@@ -341,38 +343,6 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
       </AnimatePresence>
 
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-1 space-y-6 min-h-0 no-scrollbar pb-6 pt-4">
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">Loại Nhập (Phân loại AI)</label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setScanMode('SAPO')}
-                  className={cn(
-                    "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
-                    scanMode === 'SAPO' 
-                      ? "bg-zinc-900 text-white shadow-md shadow-zinc-200" 
-                      : "text-zinc-500 hover:text-zinc-900 bg-transparent"
-                  )}
-                >
-                  <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'SAPO' ? "text-emerald-400" : "text-zinc-400")} />
-                  NHẬP SAPO
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScanMode('GPP')}
-                  className={cn(
-                    "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
-                    scanMode === 'GPP' 
-                      ? "bg-[#0F172A] text-white shadow-md shadow-zinc-200" 
-                      : "text-zinc-500 hover:text-zinc-900 bg-transparent"
-                  )}
-                >
-                  <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'GPP' ? "text-blue-400" : "text-zinc-400")} />
-                  NHẬP GPP
-                </button>
-              </div>
-            </div>
-
             <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400">Hình Ảnh</label>
@@ -504,6 +474,38 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
                   {p.name}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">LOẠI NHẬP HÀNG</label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setScanMode('SAPO')}
+                className={cn(
+                  "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
+                  scanMode === 'SAPO' 
+                    ? "bg-zinc-900 text-white shadow-md shadow-zinc-200" 
+                    : "text-zinc-500 hover:text-zinc-900 bg-transparent"
+                )}
+              >
+                <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'SAPO' ? "text-emerald-400" : "text-zinc-400")} />
+                SAPO
+              </button>
+              <button
+                type="button"
+                onClick={() => setScanMode('GPP')}
+                className={cn(
+                  "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
+                  scanMode === 'GPP' 
+                    ? "bg-red-600 text-white shadow-md shadow-red-200" 
+                    : "text-zinc-500 hover:text-zinc-900 bg-transparent"
+                )}
+              >
+                <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'GPP' ? "text-red-400" : "text-zinc-400")} />
+                GPP
+              </button>
             </div>
           </div>
 

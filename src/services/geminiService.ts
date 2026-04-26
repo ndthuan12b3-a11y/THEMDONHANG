@@ -3,6 +3,31 @@ import { GoogleGenAI, Type } from "@google/genai";
 const API_KEY = process.env.GEMINI_API_KEY;
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
+const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 3, initialDelay = 1000): Promise<T> => {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const isTransient = 
+        error?.status === 503 || 
+        error?.status === 500 || 
+        error?.message?.includes("503") ||
+        error?.message?.includes("overloaded") ||
+        error?.message?.includes("high demand") ||
+        error?.message?.includes("Try again later");
+      
+      if (!isTransient || i === maxRetries - 1) break;
+      
+      const delay = initialDelay * Math.pow(2, i);
+      console.warn(`Gemini API transient error, retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+};
+
 export interface ScanResult {
   quality: {
     isGood: boolean;
@@ -55,7 +80,7 @@ Trả về JSON:
 HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả về false.`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: "gemini-3.1-flash-lite-preview",
       contents: {
         parts: [
@@ -67,7 +92,7 @@ HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả
         responseMimeType: "application/json",
         responseSchema: qualitySchema,
       }
-    });
+    }));
 
     const parsed = JSON.parse(response.text);
     return {
@@ -157,7 +182,7 @@ Return valid JSON.`;
       }
     }));
 
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: "gemini-3.1-flash-lite-preview",
       contents: {
         parts: [
@@ -172,7 +197,7 @@ Return valid JSON.`;
         responseMimeType: "application/json",
         responseSchema: minifiedSchema,
       },
-    });
+    }));
 
     const minResult = JSON.parse(response.text);
 
@@ -223,9 +248,22 @@ Return valid JSON.`;
     return result;
   } catch (error: any) {
     console.error("Gemini Scan Error:", error);
+    
+    // Intercept transient errors (503, high demand)
+    const isTransient = 
+      error?.status === 503 || 
+      error?.message?.includes("503") ||
+      error?.message?.includes("overloaded") ||
+      error?.message?.includes("high demand") ||
+      error?.message?.includes("Try again later");
+
+    if (isTransient) {
+      throw new Error("Hệ thống AI đang quá tải (High Demand). Vui lòng đợi vài giây và thử lại.");
+    }
+
     // Intercept 429 Resource Exhausted / Quota Exceeded
     if (error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("exhausted")) {
-      throw new Error("Hệ thống AI đang quá tải hoặc tạm dừng do hết hạn mức. Vui lòng thử lại sau.");
+      throw new Error("Hệ thống AI đang tạm dừng do hết hạn mức. Vui lòng thử lại sau.");
     }
     throw error;
   }

@@ -192,13 +192,14 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
               </div>
               <div className="relative rounded-2xl overflow-y-auto border border-zinc-200 bg-zinc-50 shadow-inner h-[280px] p-2 space-y-2 no-scrollbar">
                 {imageUrls.map((url, idx) => (
-                  <img 
-                    key={idx}
-                    src={url} 
-                    alt={`Invoice ${idx + 1}`} 
-                    className="w-full h-auto object-contain rounded-xl border border-zinc-200 shadow-sm"
-                    referrerPolicy="no-referrer"
-                  />
+                  <div key={idx} className="relative group/scan-img">
+                    <img 
+                      src={url} 
+                      alt={`Invoice ${idx + 1}`} 
+                      className="w-full h-auto object-contain rounded-xl border border-zinc-200 shadow-sm"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
                 ))}
               </div>
               

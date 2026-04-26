@@ -184,7 +184,8 @@ export default function App() {
         note: o.note || '',
         timestamp: { toDate: () => new Date(o.created_at) },
         status: o.status,
-        completed_at: o.completed_at
+        completed_at: o.completed_at,
+        scan_mode: o.scan_mode
       }));
 
       setOrders(mappedOrders);
@@ -772,71 +773,6 @@ export default function App() {
             <div className="relative mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-zinc-100 text-zinc-400 group overflow-hidden">
                <div className="absolute inset-0 bg-zinc-900/5 group-hover:scale-110 transition-transform" />
                <UserIcon className="h-10 w-10 relative z-10" />
-            </div>
-
-            {/* AI Quota & Renewal Status */}
-            <div className="p-5 bg-zinc-50 border border-zinc-200 rounded-3xl text-left space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`h-2 w-2 rounded-full ${localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'bg-blue-500' : 'bg-emerald-500'} animate-pulse`} />
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                    {localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'Chế độ: API Key Cá nhân' : 'Trạng thái hệ thống AI'}
-                  </h4>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full ${localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'} text-[9px] font-black uppercase`}>
-                  {localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'Ưu tiên' : 'Hoạt động'}
-                </span>
-              </div>
-              
-              {!localStorage.getItem('CUSTOM_GEMINI_KEY') ? (
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <span className="text-[11px] font-bold text-zinc-500">Hạn mức dùng thử:</span>
-                    <span className="text-xs font-black text-zinc-950">~10.000 VNĐ</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-zinc-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 w-[78%] rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
-                  </div>
-                  <p className="text-[10px] text-zinc-400 font-medium leading-tight">
-                    * Bạn đang dùng hạn mức miễn phí của hệ thống.
-                  </p>
-                </div>
-              ) : (
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-2xl">
-                  <p className="text-[10px] text-blue-700 font-bold leading-relaxed">
-                    🚀 Đã kích hoạt API Key cá nhân. Bạn đang sử dụng hạn mức riêng từ Google AI Studio, không bị ảnh hưởng bởi hạn mức 10k của hệ thống.
-                  </p>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-zinc-200 space-y-3">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                   {localStorage.getItem('CUSTOM_GEMINI_KEY') ? 'Quản lý API Key' : 'Tự Gia hạn (Dùng vĩnh viễn)'}
-                 </h4>
-                 <div className="space-y-2">
-                    <p className="text-[10px] text-zinc-600 leading-normal font-medium">
-                      Lấy <strong>API KEY</strong> tại <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-600 font-bold underline hover:text-emerald-700">Google AI Studio</a>:
-                    </p>
-                    <Input 
-                      type="password"
-                      placeholder="Dán API Key của bạn..."
-                      className="h-9 text-[11px] rounded-xl bg-white border-zinc-200 focus-visible:ring-emerald-500"
-                      onChange={(e) => {
-                        const key = e.target.value.trim();
-                        if (key.length > 20) {
-                          localStorage.setItem('CUSTOM_GEMINI_KEY', key);
-                          toast.success("✅ Đã kích hoạt API Key riêng!");
-                          setTimeout(() => window.location.reload(), 1000);
-                        } else if (key.length === 0) {
-                          localStorage.removeItem('CUSTOM_GEMINI_KEY');
-                          toast.info("Đã quay lại hạn mức dùng chung.");
-                          setTimeout(() => window.location.reload(), 1000);
-                        }
-                      }}
-                      defaultValue={localStorage.getItem('CUSTOM_GEMINI_KEY') || ''}
-                    />
-                 </div>
-              </div>
             </div>
 
             <div className="space-y-1 text-center">

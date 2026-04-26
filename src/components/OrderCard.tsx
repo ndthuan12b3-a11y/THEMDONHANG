@@ -44,9 +44,14 @@ interface OrderCardProps {
   variants?: Variants;
 }
 
-const DynamicGalleryItem = React.memo(({ url, orderName, index }: { url: string; orderName: string; index: number }) => {
+const DynamicGalleryItem = React.memo(({ url, orderName, index, scanMode, note }: { url: string; orderName: string; index: number; scanMode?: 'SAPO' | 'GPP', note?: string }) => {
   const [dim, setDim] = useState({ w: 4000, h: 4000 }); // Default to high res to prevent initial capping
   const isFirst = index === 0;
+
+  // Fallback detection from note if scanMode is missing
+  const effectiveMode = scanMode || 
+    (note?.includes('[NHẬP SAPO]') ? 'SAPO' : 
+     note?.includes('[NHẬP GPP]') ? 'GPP' : undefined);
 
   return (
     <Item
@@ -56,25 +61,22 @@ const DynamicGalleryItem = React.memo(({ url, orderName, index }: { url: string;
       height={dim.h}
     >
       {({ ref, open }) => (
-        <img 
-          ref={ref as any}
-          onClick={open}
-          src={url} 
-          alt={orderName} 
-          className={cn(
-            "cursor-zoom-in",
-            isFirst 
-              ? "h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" 
-              : "hidden" // Hidden thumbnails for extra images
-          )}
-          referrerPolicy="no-referrer"
-          onLoad={(e) => {
-            const target = e.currentTarget;
-            if (target.naturalWidth && target.naturalHeight) {
-              setDim({ w: target.naturalWidth, h: target.naturalHeight });
-            }
-          }}
-        />
+        <div className={cn("relative group/img", isFirst ? "h-full w-full" : "hidden")}>
+          <img 
+            ref={ref as any}
+            onClick={open}
+            src={url} 
+            alt={orderName} 
+            className="cursor-zoom-in h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+            referrerPolicy="no-referrer"
+            onLoad={(e) => {
+              const target = e.currentTarget;
+              if (target.naturalWidth && target.naturalHeight) {
+                setDim({ w: target.naturalWidth, h: target.naturalHeight });
+              }
+            }}
+          />
+        </div>
       )}
     </Item>
   );
@@ -87,6 +89,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
   const [editOrderName, setEditOrderName] = useState(order.orderName);
   const [editPharmacy, setEditPharmacy] = useState<PharmacyName>(order.pharmacy);
   const [editNote, setEditNote] = useState(order.note || '');
+  const [editScanMode, setEditScanMode] = useState<'SAPO' | 'GPP' | undefined>(order.scan_mode);
   const [isScanOpen, setIsScanOpen] = useState(false);
 
   const pharmacyConfig = PHARMACIES.find(p => p.name === order.pharmacy) || PHARMACIES[0];
@@ -121,11 +124,27 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         .update({
           order_name: editOrderName,
           pharmacy: editPharmacy,
-          note: editNote
+          note: editNote,
+          scan_mode: editScanMode ?? null
         })
         .eq('id', order.id);
 
-      if (error) throw error;
+      if (error) {
+        // Handle missing column for scan_mode if it still fails here
+        if (error.code === 'PGRST204' || error.message?.includes('scan_mode')) {
+           const { error: retryError } = await supabase
+            .from('orders')
+            .update({
+              order_name: editOrderName,
+              pharmacy: editPharmacy,
+              note: editNote
+            })
+            .eq('id', order.id);
+           if (retryError) throw retryError;
+        } else {
+          throw error;
+        }
+      }
       logUserActivity('Sửa đơn hàng', `Cập nhật thông tin đơn "${editOrderName}"`);
       setIsEditing(false);
       toast.success("Đã cập nhật thông tin đơn hàng.");
@@ -170,7 +189,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         const renderGalleryItems = () => {
           return imageUrls.map((url, i) => (
              <React.Fragment key={i}>
-                <DynamicGalleryItem url={url} orderName={order.orderName} index={i} />
+                <DynamicGalleryItem url={url} orderName={order.orderName} index={i} scanMode={order.scan_mode} note={order.note} />
              </React.Fragment>
           ));
         }
@@ -261,9 +280,22 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         <div className="flex flex-1 flex-col justify-between py-1">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className={cn("text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-full text-white", pharmacyConfig.bg)}>
-                {order.pharmacy}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={cn("text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-md text-white shadow-sm", pharmacyConfig.bg)}>
+                  {order.pharmacy}
+                </span>
+                { (order.scan_mode) && (
+                  <span className={cn(
+                    "text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm",
+                    (order.scan_mode === 'SAPO')
+                      ? "bg-emerald-600 text-white" 
+                      : "bg-red-600 text-white"
+                  )}>
+                    <Sparkles className="h-2.5 w-2.5" />
+                    {order.scan_mode}
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] sm:text-xs font-medium text-zinc-400">{formattedTime}</p>
             </div>
             <h3 className="text-xs sm:text-base font-bold text-zinc-900 line-clamp-1">{order.orderName}</h3>
@@ -277,54 +309,66 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               </div>
             )}
           </div>
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="hidden md:flex h-7 sm:h-9 gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl text-[9px] sm:text-[11px] font-black uppercase tracking-wider border-emerald-500/20 text-emerald-600 hover:bg-emerald-50 px-2 sm:px-4"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsScanOpen(true);
-              }}
-            >
-              <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span>SCAN AI</span>
-            </Button>
+          <div className="flex items-center justify-end gap-1 sm:gap-1.5">
+            {(order.scan_mode) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className={cn(
+                  "h-7 sm:h-8 gap-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-tight px-2 sm:px-3 border-none shadow-sm",
+                  (order.scan_mode === 'SAPO')
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                    : "bg-red-600 text-white hover:bg-red-700"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (order.scan_mode === 'GPP') {
+                    window.open('https://gpp.com.vn/Account/Login', '_blank');
+                  } else if (order.scan_mode === 'SAPO') {
+                    window.open('https://accounts.sapo.vn/login?serviceType=omni', '_blank');
+                  }
+                }}
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>{order.scan_mode}</span>
+              </Button>
+            )}
             <Button 
               variant={order.status === 'completed' ? "default" : "outline"} 
               size="sm" 
               className={cn(
-                "h-7 sm:h-9 gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl text-[9px] sm:text-[11px] font-black uppercase tracking-wider transition-all px-2 sm:px-4",
-                order.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-200" : "text-zinc-500 hover:text-zinc-900 border-zinc-200 shadow-none"
+                "h-7 sm:h-8 gap-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-tight transition-all px-2 sm:px-3",
+                order.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600 shadow-sm" : "text-zinc-500 hover:text-zinc-900 border-zinc-200 shadow-none"
               )}
               onClick={handleToggleComplete}
             >
-              <CheckCircle2 className={cn("h-3 w-3 sm:h-4 sm:w-4", order.status === 'completed' ? "text-white" : "text-zinc-400")} />
-              <span className="hidden xs:inline">{order.status === 'completed' ? "Đã xong" : "Hoàn thành"}</span>
+              <CheckCircle2 className={cn("h-3 w-3", order.status === 'completed' ? "text-white" : "text-zinc-400")} />
+              <span>{order.status === 'completed' ? "Xong" : "Xong"}</span>
             </Button>
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-7 sm:h-9 gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-red-500 hover:bg-red-50 hover:text-red-600 px-2 sm:px-4"
+              className="h-7 sm:h-8 gap-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-tight text-zinc-400 hover:text-zinc-900 border border-zinc-200 px-2 sm:px-3" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditing(true);
+              }}
+            >
+              <RotateCw className="h-3 w-3" />
+              <span>Sửa</span>
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 sm:h-8 gap-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-tight text-red-500 hover:bg-red-50 hover:text-red-600 px-2 sm:px-3"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsDeleteConfirmOpen(true);
               }}
               disabled={isDeleting}
             >
-              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Trash2 className="h-3 w-3" />
               <span className="hidden xs:inline">Xóa</span>
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 sm:h-9 sm:w-9 text-zinc-400 hover:text-zinc-900" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsEditing(true);
-              }}
-            >
-              <RotateCw className="h-3 w-3 sm:h-4 sm:w-4" /> 
             </Button>
           </div>
         </div>
@@ -367,7 +411,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nhà thuốc</label>
                 <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">
-                  {PHARMACIES.map(p => (
+                  {PHARMACIES.filter(p => p.name !== 'HĐ THUOCSI').map(p => (
                     <Button
                       key={p.name}
                       variant={editPharmacy === p.name ? 'secondary' : 'ghost'}
@@ -388,8 +432,49 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                 <Textarea 
                   value={editNote}
                   onChange={(e) => setEditNote(e.target.value)}
-                  className="rounded-xl min-h-[100px] resize-none"
+                  className="rounded-xl min-h-[80px] resize-none"
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Phân loại nhập</label>
+                <div className="grid grid-cols-3 gap-1 p-1 bg-zinc-100 rounded-xl">
+                  <Button
+                    type="button"
+                    variant={editScanMode === 'SAPO' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className={cn(
+                      "rounded-lg text-[9px] h-8 font-black uppercase tracking-tighter",
+                      editScanMode === 'SAPO' ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm" : "text-zinc-500"
+                    )}
+                    onClick={() => setEditScanMode('SAPO')}
+                  >
+                    SAPO
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={editScanMode === 'GPP' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className={cn(
+                      "rounded-lg text-[9px] h-8 font-black uppercase tracking-tighter",
+                      editScanMode === 'GPP' ? "bg-red-600 text-white hover:bg-red-700 shadow-sm" : "text-zinc-500"
+                    )}
+                    onClick={() => setEditScanMode('GPP')}
+                  >
+                    GPP
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={editScanMode === undefined ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className={cn(
+                      "rounded-lg text-[9px] h-8 font-black uppercase tracking-tighter",
+                      editScanMode === undefined ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"
+                    )}
+                    onClick={() => setEditScanMode(undefined)}
+                  >
+                    KHÔNG
+                  </Button>
+                </div>
               </div>
             </div>
             <DialogFooter className="flex flex-row gap-2">
@@ -430,10 +515,21 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
             <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center pointer-events-none">
               <Search className="text-white h-8 w-8 scale-0 transition-transform group-hover:scale-100" />
             </div>
-            <div className="absolute left-2 top-2 z-20 pointer-events-none">
-              <span className={cn("text-[10px] font-bold uppercase px-2 py-1 rounded-lg text-white shadow-lg", pharmacyConfig.bg)}>
+            <div className="absolute left-2 top-2 z-20 flex flex-col gap-1.5 pointer-events-none">
+              <span className={cn("text-[10px] sm:text-[11px] font-black uppercase px-2.5 py-1 rounded-lg text-white shadow-xl ring-1 ring-black/5", pharmacyConfig.bg)}>
                 {order.pharmacy}
               </span>
+              { (order.scan_mode) && (
+                <span className={cn(
+                  "text-[10px] sm:text-[11px] font-black uppercase px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-xl ring-1 ring-black/5",
+                  (order.scan_mode === 'SAPO')
+                    ? "bg-emerald-600 text-white" 
+                    : "bg-red-600 text-white"
+                )}>
+                  <Sparkles className="h-3 w-3" />
+                  {order.scan_mode}
+                </span>
+              )}
             </div>
             <div className="absolute right-2 top-2 z-20 flex gap-1 opacity-0 transition-all group-hover:opacity-100">
               <Button 
@@ -464,8 +560,8 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         </Gallery>
         
         <CardHeader className="p-4 pb-0">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{formattedTime}</p>
+          <div className="flex items-center justify-between pointer-events-none">
+             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{formattedTime}</p>
           </div>
           <h3 className="mt-1 font-bold text-zinc-900 line-clamp-1">{order.orderName}</h3>
         </CardHeader>
@@ -481,36 +577,47 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between p-4 pt-0">
-          <div className="flex gap-2">
-            <Button 
-              size="sm" 
-              className="hidden md:flex h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-zinc-900 border-none text-white hover:bg-zinc-800 shadow-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsScanOpen(true);
-              }}
-            >
-              <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-              SCAN AI
-            </Button>
+        <CardFooter className="flex flex-col gap-2 p-4 pt-0">
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-100 mt-0 w-full">
+            {(order.scan_mode) && (
+              <Button 
+                size="sm" 
+                className={cn(
+                  "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1 min-w-[70px]",
+                  (order.scan_mode === 'SAPO')
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                    : "bg-red-600 text-white hover:bg-red-700"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (order.scan_mode === 'GPP') {
+                    window.open('https://gpp.com.vn/Account/Login', '_blank');
+                  } else if (order.scan_mode === 'SAPO') {
+                    window.open('https://accounts.sapo.vn/login?serviceType=omni', '_blank');
+                  }
+                }}
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>{order.scan_mode}</span>
+              </Button>
+            )}
             <Button 
               size="sm" 
               className={cn(
-                "h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md",
+                "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1 min-w-[80px]",
                 order.status === 'completed' 
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
-                  : "bg-white border-2 border-zinc-200 text-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
+                  : "bg-white border border-zinc-200 text-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
               )}
               onClick={handleToggleComplete}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {order.status === 'completed' ? "Đã xong" : "Hoàn thành"}
+              {order.status === 'completed' ? "Đã xong" : "Xong"}
             </Button>
             <Button 
               size="sm" 
               variant="outline"
-              className="h-8 gap-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-zinc-900 border-2 border-zinc-200 hover:bg-zinc-100 hover:border-zinc-400 bg-white shadow-sm"
+              className="h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight text-zinc-900 border border-zinc-200 hover:bg-zinc-100 hover:border-zinc-400 bg-white shadow-sm flex-1 min-w-[50px]"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
@@ -561,7 +668,7 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nhà thuốc</label>
                   <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">
-                    {PHARMACIES.map(p => (
+                    {PHARMACIES.filter(p => p.name !== 'HĐ THUOCSI').map(p => (
                       <Button
                         key={p.name}
                         variant={editPharmacy === p.name ? 'secondary' : 'ghost'}
@@ -577,13 +684,54 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                     ))}
                   </div>
                 </div>
-                <div className="space-y-2">
+              <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ghi chú</label>
                   <Textarea 
                     value={editNote}
                     onChange={(e) => setEditNote(e.target.value)}
-                    className="rounded-xl min-h-[100px] resize-none"
+                    className="rounded-xl min-h-[80px] resize-none"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Phân loại nhập</label>
+                  <div className="grid grid-cols-3 gap-1 p-1 bg-zinc-100 rounded-xl">
+                    <Button
+                      type="button"
+                      variant={editScanMode === 'SAPO' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        "rounded-lg text-[9px] h-8 font-black uppercase tracking-tighter",
+                        editScanMode === 'SAPO' ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm" : "text-zinc-500"
+                      )}
+                      onClick={() => setEditScanMode('SAPO')}
+                    >
+                      SAPO
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={editScanMode === 'GPP' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        "rounded-lg text-[9px] h-8 font-black uppercase tracking-tighter",
+                        editScanMode === 'GPP' ? "bg-red-600 text-white hover:bg-red-700 shadow-sm" : "text-zinc-500"
+                      )}
+                      onClick={() => setEditScanMode('GPP')}
+                    >
+                      GPP
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={editScanMode === undefined ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        "rounded-lg text-[9px] h-8 font-black uppercase tracking-tighter",
+                        editScanMode === undefined ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"
+                      )}
+                      onClick={() => setEditScanMode(undefined)}
+                    >
+                      KHÔNG
+                    </Button>
+                  </div>
                 </div>
               </div>
               <DialogFooter className="flex flex-row gap-2 sm:justify-end">
