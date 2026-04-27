@@ -30,7 +30,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   const [note, setNote] = useState('');
   const [uploading, setUploading] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [aiResults, setAiResults] = useState<Record<string, { isScanning: boolean, issues: string[] }>>({});
+  const [aiResults, setAiResults] = useState<Record<string, { isScanning: boolean, issues: string[], score?: number, verdict?: string }>>({});
   const [isScanningAI, setIsScanningAI] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [scanMode, setScanMode] = useState<'SAPO' | 'GPP'>('SAPO');
@@ -184,7 +184,15 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
               });
             }
             
-            setAiResults(prev => ({ ...prev, [key]: { isScanning: false, issues: quality.issues || [] } }));
+            setAiResults(prev => ({ 
+              ...prev, 
+              [key]: { 
+                isScanning: false, 
+                issues: quality.issues || [],
+                score: quality.score,
+                verdict: quality.verdict
+              } 
+            }));
           } catch (e) {
             setAiResults(prev => ({ ...prev, [key]: { isScanning: false, issues: [] } }));
           }
@@ -414,13 +422,19 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
                             </div>
                           ) : aiStatus.issues.length > 0 ? (
                             <div className="bg-amber-500/90 backdrop-blur text-white px-1.5 py-0.5 rounded-md shadow flex items-center gap-1 border border-amber-400">
-                              <AlertTriangle className="w-3 h-3" />
-                              <span className="text-[9px] font-bold truncate max-w-[50px]">{aiStatus.issues[0]}</span>
+                               <AlertTriangle className="w-3 h-3" />
+                               <div className="flex flex-col">
+                                 <span className="text-[9px] font-bold leading-tight">{aiStatus.verdict}</span>
+                                 <span className="text-[7px] font-medium opacity-80 leading-none">{aiStatus.score}% OCR</span>
+                               </div>
                             </div>
                           ) : (
                             <div className="bg-emerald-500/90 backdrop-blur text-white px-1.5 py-0.5 rounded-md shadow flex items-center gap-1 border border-emerald-400">
-                              <Sparkles className="w-3 h-3" />
-                              <span className="text-[9px] font-bold">Đạt Chuẩn AI</span>
+                               <Sparkles className="w-3 h-3" />
+                               <div className="flex flex-col">
+                                 <span className="text-[9px] font-bold leading-tight">NÉT</span>
+                                 <span className="text-[7px] font-medium opacity-80 leading-none">{aiStatus.score}% OCR</span>
+                               </div>
                             </div>
                           )}
                         </div>

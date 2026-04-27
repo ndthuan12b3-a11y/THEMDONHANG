@@ -55,7 +55,10 @@ const withRetry = async <T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
 export interface ScanResult {
   quality: {
     isGood: boolean;
-    reason?: string;
+    issue?: string;
+    verdict?: string;
+    score?: number;
+    analysis?: string;
   };
   data: any[];
   total_amount: string;
@@ -69,37 +72,46 @@ export interface ScanResult {
 
 export interface ImageQualityResult {
   isGood: boolean;
-  issues: string[]; // e.g. ["Mờ", "Lóa", "Không thấy chữ"]
+  verdict: "NÉT" | "MỜ";
+  score: number;
+  issue: string;
+  analysis: string;
+  issues: string[]; 
 }
 
 export const checkImageQuality = async (imageBase64: string): Promise<ImageQualityResult> => {
   const qualitySchema = {
     type: Type.OBJECT,
     properties: {
-      g: { type: Type.BOOLEAN },
-      i: { 
-        type: Type.ARRAY,
-        items: { type: Type.STRING }
-      }
+      is_strict_sharp: { type: Type.BOOLEAN },
+      ocr_accuracy_score: { type: Type.NUMBER },
+      issue: { type: Type.STRING },
+      analysis: { type: Type.STRING }
     },
-    required: ["g", "i"]
+    required: ["is_strict_sharp", "ocr_accuracy_score", "issue", "analysis"]
   };
 
-  const prompt = `Bạn là chuyên gia kiểm định hình ảnh cho hệ thống OCR y tế. 
-Nhiệm vụ: Đánh giá xem ảnh hóa đơn này có đủ độ nét để trích xuất dữ liệu chính xác (tên thuốc, số lô, hạn dùng) hay không.
+  const prompt = `**System Instructions:**
 
-TIÊU CHUẨN CỰC KỲ KHẮT KHE:
-1. Độ nét (Blur): Nếu các dòng chữ nhỏ nhất bị nhòe, không phân biệt được chữ 'o' và 'e', hoặc 'i' và 'l' -> g=false, i=["Mờ"].
-2. Độ lóa (Glare): Nếu có ánh đèn flash phản chiếu làm mất chi tiết ở bất kỳ khu vực chứa chữ nào -> g=false, i=["Lóa"].
-3. Ánh sáng: Nếu ảnh quá tối dẫn đến nhiễu hạt che mất nét chữ -> g=false, i=["Thiếu sáng"].
-4. Góc chụp: Nếu ảnh bị cắt mất góc hóa đơn hoặc quá nghiêng khiến chữ bị biến dạng -> g=false, i=["Góc chụp"].
+**Role:** Expert Digital Document Quality Auditor.
 
-Trả về JSON:
-- g: true nếu ảnh HOÀN HẢO, nét căng.
-- g: false nếu có bất kỳ lỗi nào trên.
-- i: Danh sách các lỗi bằng tiếng Việt (tối đa 2 lỗi quan trọng nhất).
+**Strict Core Task:** Analyze uploaded images of documents/invoices ONLY for pixel-level sharp clarity, specifically for OCR (Optical Character Recognition) quality. Disregard if you can understand the overall context. You must scrutinize the edges of the printed characters.
 
-HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả về false.`;
+**Definition of "BLURRED" for this task:**
+If a printed character (e.g., number '0' or letter 'a') does not have crisp, high-contrast, sharp boundaries, it is BLURRED. If there is a "soft transition" or a gray shadow between the black ink and white paper at 100% zoom, it is BLURRED.
+
+**Analysis Steps:**
+1. Zoom in digitally on fine text sections (like Addresses, Item Names, Unit Prices).
+2. Look at the edge quality of the numbers and letters.
+3. Determine if the transition is a steep gradient (sharp) or a gradual gradient (blurred/soft).
+
+**Output Format (JSON strictly):**
+{
+  "is_strict_sharp": [true/false],
+  "ocr_accuracy_score": [0-100],
+  "issue": "Mô tả vấn đề cụ thể bằng tiếng Việt. VD: Nét chữ bị soft, nhòe vào nền, cam bẩn.",
+  "analysis": "Describe the edge quality of characters at the pixel level."
+}`;
 
   const ai = getAI();
   try {
@@ -119,12 +131,23 @@ HÃY CỰC KỲ KHẮT KHE. Nếu nghi ngờ ảnh không đủ nét, hãy trả
 
     const parsed = JSON.parse(extractText(response));
     return {
-      isGood: parsed.g,
-      issues: parsed.i || []
+      isGood: parsed.is_strict_sharp,
+      verdict: parsed.is_strict_sharp ? "NÉT" : "MỜ",
+      score: parsed.ocr_accuracy_score,
+      issue: parsed.issue,
+      analysis: parsed.analysis,
+      issues: parsed.is_strict_sharp ? [] : [parsed.issue]
     };
   } catch (error) {
     console.error("Gemini Check Quality Error:", error);
-    return { isGood: true, issues: [] };
+    return { 
+      isGood: true, 
+      verdict: "NÉT", 
+      score: 100, 
+      issue: "N/A",
+      analysis: "N/A",
+      issues: [] 
+    };
   }
 };
 
@@ -140,9 +163,11 @@ export const scanInvoice = async (
         type: Type.OBJECT,
         properties: {
           g: { type: Type.BOOLEAN },
-          r: { type: Type.STRING }
+          s: { type: Type.NUMBER },
+          r: { type: Type.STRING },
+          a: { type: Type.STRING }
         },
-        required: ["g"]
+        required: ["g", "s", "r", "a"]
       },
       tot: { type: Type.STRING },
       id: { type: Type.STRING },
@@ -174,30 +199,27 @@ export const scanInvoice = async (
     required: ["q", "d"]
   };
 
-  const systemInstruction = `You are a professional invoice scanner for pharmacies in Vietnam.
-Step 1: Check quality. If bad, set q.g=false and reason in q.r.
-Step 2: If good, extract data based on MODE.
+  const systemInstruction = `**System Instructions:**
+**Role:** Expert Digital Document Quality Auditor & Invoice Scanner.
 
-***CRITICAL RULES***:
-1. ITEM EXTRACTION (d):
-   - YOU MUST EXTRACT 'số lô' (l) AND 'hạn dùng' (h) FOR EVERY SINGLE ITEM. 
-   - If not found, output 'N/A'. DO NOT leave blank.
-   - HSD format: DD/MM/YYYY. If only month/year or year, convert to DD/MM/YYYY (e.g. 12/2025 -> 01/12/2025).
-   - MODE SAPO: 
-     * Prices (p) MUST be AFTER TAX (Giá sau thuế). 
-     * Format (p): Extract exactly as "xxx,xxx,xxx" (integer string with comma separators).
-   - MODE GPP: 
-     * Prices (p) MUST be BEFORE TAX (Giá trước thuế).
-     * Format (p): Extract exactly as "xxx,xxx,xxx.xx" (string with comma separators for thousands and dot for decimal).
-     * Extract VAT (v) as a percentage number (e.g. 5, 8, 10).
-2. PRECISION: Ensure unit quantities (q) and unit prices (p) are exactly as printed. Do not round numbers.
-3. HEADER EXTRACTION:
-   - MODE GPP: Extract invoice_date (id), invoice_no (in), tax_code (tx), supplier_name (sn), buyer_name (bn), buyer_tax_code (btx).
-   - MODE SAPO: IGNORE headers (sn, tx, bn, btx). ONLY extract 'tot' (Final Total) and 'id/in' (Date/No) if clearly visible for reference.
+**Phase 1: Strict Quality Analysis**
+- Scrutinize the edges of printed characters at a pixel level.
+- BLURRED definition: Soft transition or gray shadow between ink and paper.
+- Verdict: SHARP (Steep gradient), BLURRED (Gradual/Soft gradient).
+- Map quality results to 'q' object: g (is_strict_sharp), s (ocr_accuracy_score), r (issue - Vietnamese), a (analysis - English).
 
-3. FINAL TOTAL: Extract the explicitly stated "Tổng cộng" / "Tổng tiền thanh toán" into 'tot'.
+**Phase 2: Technical Data Extraction**
+- If q.g is true, extract based on MODE.
 
-Return valid JSON.`;
+***EXTRACTION PROTOCOL***:
+1. ITEM DATA (d):
+   - Extract 'số lô' (l) and 'hạn dùng' (h) (HSD format: DD/MM/YYYY).
+   - MODE SAPO: Prices (p) AFTER TAX. Format: "xxx,xxx,xxx".
+   - MODE GPP: Prices (p) BEFORE TAX. Format: "xxx,xxx,xxx.xx".
+2. TOTAL (tot): Final payable total.
+3. HEADER: Supplier, customer, tax codes.
+
+Return strictly valid JSON.`;
 
   try {
     const imageParts = imagesBase64.map(base64 => ({
@@ -258,7 +280,10 @@ Return valid JSON.`;
     const result: ScanResult = {
       quality: {
         isGood: minResult.q.g,
-        reason: minResult.q.r
+        verdict: minResult.q.g ? "NÉT" : "MỜ",
+        score: minResult.q.s,
+        issue: minResult.q.r,
+        analysis: minResult.q.a
       },
       total_amount: minResult.tot || "0",
       invoice_date: minResult.id,

@@ -131,8 +131,8 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
         logUserActivity('Quét AI (API)', `Sử dụng Gemini bóc tách hóa đơn ở chế độ ${mode}${dup ? ' - PHÁT HIỆN TRÙNG' : ''}`);
         setResult(finalResult);
       } else {
-        toast.warning(`Chất lượng ảnh thấp: ${scanResult.quality.reason}`);
-        logUserActivity('Quét AI (Thất bại)', `Ảnh chất lượng thấp: ${scanResult.quality.reason}`);
+        toast.warning(`Chất lượng ảnh thấp: ${scanResult.quality.issue}`);
+        logUserActivity('Quét AI (Thất bại)', `Ảnh chất lượng thấp: ${scanResult.quality.issue}`);
         setResult(scanResult);
       }
       
@@ -141,7 +141,7 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
       const msg = error.message || "Đã xảy ra lỗi không xác định";
       toast.error(`Lỗi AI: ${msg}`);
       setResult({
-        quality: { isGood: false, reason: `Lỗi kết nối AI: ${msg}` },
+        quality: { isGood: false, issue: `Lỗi kết nối AI: ${msg}` },
         data: [],
         total_amount: "0"
       });
@@ -330,16 +330,37 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                       animate={{ opacity: 1, y: 0 }}
                       className="absolute inset-0 flex flex-col bg-white"
                     >
-                      {/* Quality Alert */}
-                      {!result.quality.isGood && (
-                        <div className="m-4 p-4 bg-orange-50 border border-orange-200 rounded-xl flex items-start gap-3">
-                          <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0" />
-                          <div>
-                            <p className="text-orange-900 font-bold text-sm uppercase">Phát hiện ảnh mờ / Không đạt</p>
-                            <p className="text-orange-700 text-sm mt-1 leading-relaxed">{result.quality.reason}</p>
+                      {/* Quality Detail */}
+                      <div className={cn(
+                        "m-4 p-4 rounded-xl border flex flex-col gap-3",
+                        result.quality.isGood ? "bg-emerald-50 border-emerald-100" : "bg-orange-50 border-orange-100"
+                      )}>
+                        <div className="flex items-start gap-3">
+                          {result.quality.isGood ? (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0" />
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className={cn("font-bold text-sm uppercase", result.quality.isGood ? "text-emerald-900" : "text-orange-900")}>
+                                {result.quality.isGood ? "CHẤT LƯỢNG ẢNH: NÉT" : "CHẤT LƯỢNG ẢNH: CHƯA ĐẠT"}
+                              </p>
+                              <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-full", result.quality.isGood ? "bg-emerald-200 text-emerald-800" : "bg-orange-200 text-orange-800")}>
+                                {result.quality.score}% | {result.quality.verdict}
+                              </span>
+                            </div>
+                            <p className={cn("text-xs mt-1 leading-relaxed", result.quality.isGood ? "text-emerald-700" : "text-orange-700")}>
+                              {result.quality.issue}
+                            </p>
+                            {result.quality.analysis && (
+                              <p className="text-[10px] italic mt-1.5 opacity-70">
+                                <b>Phân tích kỹ thuật:</b> {result.quality.analysis}
+                              </p>
+                            )}
                           </div>
                         </div>
-                      )}
+                      </div>
 
                       {/* Invoice Info Summary - Only show in GPP or if it's a rescan with data */}
                       {mode === 'GPP' && (result.invoice_date || result.invoice_no || result.tax_code || result.supplier_name || result.buyer_name || result.buyer_tax_code) && (

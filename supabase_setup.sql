@@ -42,7 +42,30 @@ create policy "Enable all access for everyone" on orders for all using (true);
 create policy "Enable all access for everyone" on notifications for all using (true);
 create policy "Enable all access for everyone" on activity_logs for all using (true);
 
--- Enable Realtime
-alter publication supabase_realtime add table orders;
-alter publication supabase_realtime add table notifications;
-alter publication supabase_realtime add table activity_logs;
+-- Enable Realtime (Ignore error if already exists)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'orders'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE orders;
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'activity_logs'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE activity_logs;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping publication add: %', SQLERRM;
+END $$;
