@@ -42,6 +42,7 @@ interface OrderCardProps {
   order: Order;
   viewMode: 'grid' | 'list';
   variants?: Variants;
+  currentUserName: string;
 }
 
 const DynamicGalleryItem = React.memo(({ url, orderName, index, scanMode, note }: { url: string; orderName: string; index: number; scanMode?: 'SAPO' | 'GPP', note?: string }) => {
@@ -82,7 +83,7 @@ const DynamicGalleryItem = React.memo(({ url, orderName, index, scanMode, note }
   );
 });
 
-export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardProps>(({ order, viewMode, variants }, ref) => {
+export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardProps>(({ order, viewMode, variants, currentUserName }, ref) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
@@ -107,6 +108,14 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
       if (error) throw error;
       logUserActivity('Xóa đơn hàng', `Xóa vĩnh viễn đơn "${order.orderName}" của [${order.pharmacy}]`);
+      
+      // Notify deletion
+      await supabase.from('notifications').insert({
+        title: `Đã xóa đơn hàng`,
+        body: `${currentUserName} đã xóa đơn "${order.orderName}"`,
+        read: false
+      });
+
       toast.success("Đã xóa đơn hàng.");
       setIsDeleteConfirmOpen(false);
     } catch (error) {
@@ -170,6 +179,18 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         .eq('id', order.id);
 
       if (error) throw error;
+
+      // Broadcast notification for everyone
+      try {
+        await supabase.from('notifications').insert({
+          title: isCompleting ? `Đơn hoàn thành` : `Đơn đã mở lại`,
+          body: `${currentUserName} đã ${isCompleting ? 'hoàn thành' : 'mở lại'} đơn "${order.orderName}"`,
+          read: false
+        });
+      } catch (notifErr) {
+        console.warn("Failed to create status notification record");
+      }
+
       logUserActivity(
         newStatus === 'completed' ? 'Hoàn thành đơn' : 'Bỏ hoàn thành đơn',
         `Chuyển trạng thái đơn "${order.orderName}"`

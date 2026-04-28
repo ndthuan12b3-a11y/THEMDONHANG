@@ -43,6 +43,9 @@ create policy "Enable all access for everyone" on notifications for all using (t
 create policy "Enable all access for everyone" on activity_logs for all using (true);
 
 -- Enable Realtime (Ignore error if already exists)
+ALTER TABLE orders REPLICA IDENTITY FULL;
+ALTER TABLE notifications REPLICA IDENTITY FULL;
+
 DO $$
 BEGIN
     IF NOT EXISTS (

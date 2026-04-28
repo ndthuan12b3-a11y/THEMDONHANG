@@ -237,8 +237,8 @@ export default function App() {
             audioRef.current.play().catch(e => console.log('Audio play failed:', e));
           }
 
-          toast.info(`Đơn mới: ${newOrder.order_name}`, {
-            description: `Người gửi: ${newOrder.sender_name}`,
+          toast.info(`Đơn mới từ ${newOrder.sender_name}`, {
+            description: `Mục tiêu: ${newOrder.order_name}`,
             duration: 8000
           });
           
@@ -247,6 +247,17 @@ export default function App() {
               body: `${newOrder.sender_name} vừa gửi đơn "${newOrder.order_name}"`,
               icon: "/favicon.ico"
             });
+          }
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedOrder = payload.new;
+          const oldOrder = payload.old;
+          
+          // Only notify if status changed to completed
+          if (updatedOrder.status === 'completed' && oldOrder.status !== 'completed') {
+             toast.success(`Đơn hoàn thành: ${updatedOrder.order_name}`, {
+               description: `Đã được xử lý`,
+               duration: 5000
+             });
           }
         }
       })
@@ -363,9 +374,9 @@ export default function App() {
 
   const formatDateHeader = (dateStr: string) => {
     const date = new Date(dateStr);
-    if (isToday(date)) return 'Hôm nay';
-    if (isYesterday(date)) return 'Hôm qua';
-    return format(date, 'eeee, dd MMMM yyyy', { locale: vi });
+    const formattedDate = format(date, 'eeee, dd MMMM yyyy', { locale: vi });
+    // Capitalize the first letter (e.g., 'thứ ba' -> 'Thứ ba')
+    return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
 
   return (
@@ -743,8 +754,13 @@ export default function App() {
                         {formatDateHeader(date)}
                       </h3>
                       <div className="h-px flex-1 bg-zinc-200" />
-                      <span className="text-[10px] font-black text-zinc-300 bg-white px-2 py-0.5 rounded-full border border-zinc-100 uppercase">
-                        {dateOrders.length} đơn
+                      <span className="text-[10px] font-black text-zinc-500 bg-white px-3 py-1 rounded-full border border-zinc-200 shadow-sm transition-all hover:border-zinc-300">
+                        <span className="text-emerald-600">
+                          {dateOrders.filter(o => o.status === 'completed').length}
+                        </span>
+                        <span className="mx-0.5 text-zinc-300">/</span>
+                        <span className="text-zinc-600">{dateOrders.length}</span>
+                        <span className="ml-1 opacity-60">ĐƠN</span>
                       </span>
                     </div>
                     
@@ -765,6 +781,7 @@ export default function App() {
                              order={order} 
                              viewMode={viewMode} 
                              variants={itemVariants}
+                             currentUserName={userName || 'Người dùng'}
                            />
                         ))}
                       </AnimatePresence>

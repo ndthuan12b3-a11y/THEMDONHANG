@@ -312,6 +312,19 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
 
       if (insertError) throw insertError;
 
+      // Add to notifications table for real-time sync across all users
+      try {
+        await supabase
+          .from('notifications')
+          .insert({
+            title: `Đơn mới từ ${userName}`,
+            body: `Đã gửi đơn "${orderName.trim()}" tới ${pharmacy}`,
+            read: false
+          });
+      } catch (notifErr) {
+        console.warn("Failed to create notification record, but order was saved.");
+      }
+
       saveSupplierToHistory(orderName);
       toast.success("Đã thêm đơn hàng thành công!", { id: loadingToast });
       logUserActivity('Tải lên đơn hàng', `Gửi đơn "${orderName.trim()}" với ${files.length} ảnh tới ${pharmacy}`);
