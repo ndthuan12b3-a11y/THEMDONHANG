@@ -7,8 +7,10 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Scan, FileJson, AlertCircle, CheckCircle2, Clipboard, Loader2, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Scan, FileJson, AlertCircle, CheckCircle2, Clipboard, Loader2, Sparkles, AlertTriangle, RefreshCw, Maximize2, RotateCw, X, ZoomIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Gallery, Item } from 'react-photoswipe-gallery';
+import 'photoswipe/dist/photoswipe.css';
 import { scanInvoice, ScanResult } from '../services/geminiService';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -26,6 +28,7 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
   const [mode, setMode] = useState<'SAPO' | 'GPP'>(defaultMode);
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [imageDims, setImageDims] = useState<Record<string, { w: number, h: number }>>({});
 
   // Sync mode when defaultMode changes (e.g. order changed while modal open)
   React.useEffect(() => {
@@ -165,6 +168,82 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
     });
   };
 
+  const handleRotate = (pswp: any) => {
+    const currSlide = pswp.currSlide;
+    if (!currSlide?._ais_rotation) currSlide._ais_rotation = 0;
+    currSlide._ais_rotation = (currSlide._ais_rotation + 90) % 360;
+    
+    const img = currSlide.container.querySelector('img');
+    if (img) {
+      img.style.transition = 'transform 0.3s ease';
+      img.style.transform = `rotate(${currSlide._ais_rotation}deg)`;
+    }
+  };
+
+  const handleGalleryOpen = (pswp: any) => {
+    // Add custom buttons to UI
+    pswp.on('uiRegister', () => {
+      pswp.ui.registerElement({
+        name: 'rotate-button',
+        ariaLabel: 'Xoay ảnh',
+        order: 8,
+        isButton: true,
+        html: '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 24 24" width="24" height="24"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 21V15h6l-2.56 2.56A7.75 7.75 0 0 0 12 19a7 7 0 0 0 7-7 7 7 0 0 0-7-7 7.75 7.75 0 0 0-5.56 2.44L4.72 5.72A9.75 9.75 0 0 1 12 3a9 9 0 0 1 9 9z" fill="currentColor"/></svg>',
+        onClick: () => handleRotate(pswp)
+      });
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!pswp.currSlide) return;
+      const center = { x: pswp.viewportSize.x / 2, y: pswp.viewportSize.y / 2 };
+      const currentZoom = pswp.currSlide.currZoomLevel;
+      
+      if (e.key === '=' || e.key === '+') {
+        pswp.currSlide.zoomTo(currentZoom * 1.3, center, 200);
+      } else if (e.key === '-') {
+        pswp.currSlide.zoomTo(currentZoom / 1.3, center, 200);
+      } else if (e.key.toLowerCase() === 'r') {
+        handleRotate(pswp);
+      }
+    };
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      if (!pswp.currSlide) return;
+      if (!e.ctrlKey) {
+        e.preventDefault();
+        const zoomSpeed = 0.002; 
+        const delta = -e.deltaY;
+        const currentZoom = pswp.currSlide.currZoomLevel;
+        let newZoom = currentZoom * (1 + delta * zoomSpeed);
+        const maxAllowedZoom = pswp.currSlide.zoomLevels.max * 5;
+        newZoom = Math.max(pswp.currSlide.zoomLevels.initial * 0.5, Math.min(newZoom, maxAllowedZoom));
+        const center = { x: e.clientX, y: e.clientY };
+        pswp.currSlide.zoomTo(newZoom, center, 0); 
+      }
+    };
+    
+    const galleryElement = pswp.template || pswp.element;
+    if (galleryElement) {
+      galleryElement.addEventListener('wheel', handleWheelEvent, { passive: false });
+    }
+    
+    document.addEventListener('keydown', handleKeyDown);
+    pswp.on('destroy', () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (galleryElement) {
+        galleryElement.removeEventListener('wheel', handleWheelEvent);
+      }
+    });
+
+    // Reset rotation on slide change
+    pswp.on('change', () => {
+      if (pswp.currSlide && pswp.currSlide._ais_rotation) {
+        const img = pswp.currSlide.container.querySelector('img');
+        if (img) img.style.transform = `rotate(${pswp.currSlide._ais_rotation}deg)`;
+      }
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false} className="!max-w-none sm:!max-w-none w-screen h-[100dvh] flex flex-col p-0 gap-0 overflow-hidden bg-white border-none !rounded-none pb-0 pt-0 !translate-y-0 !translate-x-0 !top-0 !left-0">
@@ -191,16 +270,45 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                 </label>
               </div>
               <div className="relative rounded-2xl overflow-y-auto border border-zinc-200 bg-zinc-50 shadow-inner h-[280px] p-2 space-y-2 no-scrollbar">
-                {imageUrls.map((url, idx) => (
-                  <div key={idx} className="relative group/scan-img">
-                    <img 
-                      src={url} 
-                      alt={`Invoice ${idx + 1}`} 
-                      className="w-full h-auto object-contain rounded-xl border border-zinc-200 shadow-sm"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                ))}
+                <Gallery onOpen={handleGalleryOpen} options={{ bgOpacity: 0.9, padding: { top: 20, bottom: 20, left: 20, right: 20 }, wheelToZoom: true, secondaryZoomLevel: 2, maxZoomLevel: 5 }}>
+                  {imageUrls.map((url, idx) => (
+                    <Item
+                      key={idx}
+                      original={url}
+                      thumbnail={url}
+                      width={imageDims[url]?.w || 2000}
+                      height={imageDims[url]?.h || 2000}
+                    >
+                      {({ ref, open }) => (
+                        <div className="relative group/scan-img">
+                          <img 
+                            ref={ref as any}
+                            src={url} 
+                            alt={`Invoice ${idx + 1}`} 
+                            className="w-full h-auto object-contain rounded-xl border border-zinc-200 shadow-sm cursor-pointer"
+                            referrerPolicy="no-referrer"
+                            onClick={open}
+                            onLoad={(e) => {
+                              const target = e.currentTarget;
+                              if (target.naturalWidth && target.naturalHeight) {
+                                setImageDims(prev => ({
+                                  ...prev,
+                                  [url]: { w: target.naturalWidth, h: target.naturalHeight }
+                                }));
+                              }
+                            }}
+                          />
+                          <button 
+                            onClick={open}
+                            className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-lg opacity-0 group-hover/scan-img:opacity-100 transition-opacity z-10"
+                          >
+                            <ZoomIn className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </Item>
+                  ))}
+                </Gallery>
               </div>
               
               <div className="grid grid-cols-2 gap-3 pt-2">
