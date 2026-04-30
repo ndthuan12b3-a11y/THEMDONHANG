@@ -7,7 +7,7 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Scan, FileJson, AlertCircle, CheckCircle2, Clipboard, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { Scan, FileJson, AlertCircle, CheckCircle2, Clipboard, Loader2, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { scanInvoice, ScanResult } from '../services/geminiService';
 import { toast } from 'sonner';
@@ -430,10 +430,10 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
                                       <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">Số lô</th>
                                       <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">HSD</th>
                                       <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">ĐVT</th>
-                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">SL</th>
-                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">ĐG Nhập</th>
-                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">CK</th>
-                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">VAT</th>
+                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">S.lg</th>
+                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">Đơn giá nhập</th>
+                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">Tổng chiết khấu</th>
+                                      <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">VAT(%)</th>
                                       <th className="px-4 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[11px]">Thành tiền</th>
                                     </>
                                   )}
@@ -606,12 +606,25 @@ export const ScanAIModal: React.FC<ScanAIModalProps> = ({ isOpen, onOpenChange, 
           </div>
         </div>
 
-        <DialogFooter className="p-4 sm:p-5 bg-white border-t border-zinc-200 flex-row justify-end space-x-3 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] z-10 shrink-0">
+        <DialogFooter className="p-4 sm:p-5 bg-white border-t border-zinc-200 flex-row justify-end items-center space-x-3 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] z-10 shrink-0">
+          <div className="mr-auto">
+            {result && (
+              <Button 
+                variant="ghost" 
+                onClick={() => handleScan(true)} 
+                disabled={isScanning}
+                className="rounded-xl h-11 text-zinc-500 font-bold hover:bg-zinc-100 uppercase tracking-widest text-[10px] px-4 gap-2"
+              >
+                <RefreshCw className={cn("h-4 w-4", isScanning && "animate-spin")} />
+                Quét Lại
+              </Button>
+            )}
+          </div>
           <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl h-11 text-zinc-500 font-bold hover:bg-zinc-100 uppercase tracking-widest text-xs px-8">Đóng Hub</Button>
           <Button 
             className="rounded-xl h-11 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-emerald-200 px-8 transition-colors"
             onClick={copyToClipboard}
-            disabled={!result || !result.quality.isGood}
+            disabled={!result || !result.quality.isGood || isScanning}
           >
             Lưu Kết Quả
           </Button>

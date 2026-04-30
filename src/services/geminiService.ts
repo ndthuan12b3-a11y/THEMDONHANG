@@ -116,7 +116,7 @@ If a printed character (e.g., number '0' or letter 'a') does not have crisp, hig
   const ai = getAI();
   try {
     const response = await withRetry(() => ai.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] || imageBase64 } },
@@ -208,16 +208,31 @@ export const scanInvoice = async (
 - Verdict: SHARP (Steep gradient), BLURRED (Gradual/Soft gradient).
 - Map quality results to 'q' object: g (is_strict_sharp), s (ocr_accuracy_score), r (issue - Vietnamese), a (analysis - English).
 
-**Phase 2: Technical Data Extraction**
+**Phase 2: Deep Data Extraction**
 - If q.g is true, extract based on MODE.
+- **CRITICAL**: You must extract EVERY SINGLE LINE ITEM present in the document. Do not summarize or skip pages.
 
 ***EXTRACTION PROTOCOL***:
 1. ITEM DATA (d):
-   - Extract 'số lô' (l) and 'hạn dùng' (h) (HSD format: DD/MM/YYYY).
-   - MODE SAPO: Prices (p) AFTER TAX. Format: "xxx,xxx,xxx".
-   - MODE GPP: Prices (p) BEFORE TAX. Format: "xxx,xxx,xxx.xx".
-2. TOTAL (tot): Final payable total.
-3. HEADER: Supplier, customer, tax codes.
+   - **CRITICAL**: Extract EVERY single row from the table. Do not skip any items.
+   - **Fields**:
+     - n: STT (Number)
+     - t: Tên hàng hóa / Tên HH (String)
+     - l: Số lô (String)
+     - h: Hạn sử dụng / HSD (Format: DD/MM/YYYY)
+     - dv: Đơn vị tính / ĐVT (String)
+     - q: Số lượng / S.lg (Number)
+     - p: Đơn giá nhập (String. MODE SAPO: After Tax "xxx,xxx,xxx". MODE GPP: BEFORE TAX. ALWAYS format as "xxx,xxx,xxx.xx" with two decimal places. Example: if image says 231.884, output "231,884.00").
+     - c: Chiết khấu / Tổng chiết khấu (String)
+     - v: VAT % (Number, e.g., 5, 8, 10 or 0)
+     - tt: Thành tiền (String)
+2. TOTAL (tot): Final payable total amount.
+3. HEADER IDENTIFICATION (CRITICAL for GPP):
+   - **Seller (sn)**: Identify the entity usually at the very TOP. Keywords: "Đơn vị bán hàng", "Người bán", "Tên đơn vị". Look near the first "Mã số thuế" (tx).
+   - **Buyer (bn)**: Identify the entity listed below the seller. Keywords: "Đơn vị mua hàng", "Khách hàng", "Người mua".
+   - **Invoice Date (id)**: Format: DD/MM/YYYY. Look for "Ngày", "Ngày lập", "Ngày hóa đơn", "Ngày ký" or "Ngày... tháng... năm...". Usually found in the header or near the signatures.
+   - **Invoice Number (in)**: Look for "Số", "Số hóa đơn", "Invoice No", "No.". Often found near labels like "Ký hiệu" or "Mẫu số".
+   - **Entity Priority**: If both a person's name ("Nguyễn Văn A") and a Company name ("Công Ty TNHH...") are listed in the buyer section, extract the Company Name into 'bn'.
 
 Return strictly valid JSON.`;
 
@@ -230,7 +245,7 @@ Return strictly valid JSON.`;
     }));
 
     const response = await withRetry(() => ai.models.generateContent({
-      model: "gemini-3.1-flash-lite-preview",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           ...imageParts,
