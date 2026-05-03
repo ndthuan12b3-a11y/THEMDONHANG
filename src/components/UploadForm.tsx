@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Package, Image as ImageIcon, Camera, X, Plus, User as UserIcon, Loader2, ChevronRight, Settings2, AlertTriangle, Sparkles } from 'lucide-react';
+import { format } from 'date-fns';
+import { Package, Image as ImageIcon, Camera, X, Plus, User as UserIcon, Loader2, ChevronRight, Settings2, AlertTriangle, Sparkles, FileText } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, handleSupabaseError } from '../supabase';
@@ -11,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { PharmacyName, PHARMACIES, PharmacyConfig } from '../types';
 import { ImageEditor } from './ImageEditor';
 import { logUserActivity } from './SystemLogsModal';
-import { checkImageQuality, scanInvoice, ScanResult } from '../services/geminiService';
+import { checkImageQuality, scanInvoice, scanInvoiceNumber, ScanResult } from '../services/geminiService';
 
 interface UploadFormProps {
   defaultPharmacy: PharmacyName;
@@ -23,6 +24,7 @@ interface UploadFormProps {
 export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePharmacies }: UploadFormProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [orderName, setOrderName] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [supplierHistory, setSupplierHistory] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
@@ -32,8 +34,12 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   const [previews, setPreviews] = useState<string[]>([]);
   const [aiResults, setAiResults] = useState<Record<string, { isScanning: boolean, issues: string[], score?: number, verdict?: string }>>({});
   const [isScanningAI, setIsScanningAI] = useState(false);
+  const [isScanningInvoice, setIsScanningInvoice] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [scanMode, setScanMode] = useState<'SAPO' | 'GPP'>('SAPO');
+  const [submitDate, setSubmitDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  const isThuan = userName.toLowerCase().includes('thuận');
 
   const DEFAULT_SUPPLIERS = ['TỔNG KHO 0907', 'NT TUỆ THIỆN', 'NT HƯNG THỊNH', 'NT PHÚC AN'];
 
@@ -174,6 +180,23 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
           try {
             // Tạm dừng cực ngắn để UI không bị đơ
             await new Promise(r => setTimeout(r, 100));
+            
+            // Quét số hóa đơn nếu chưa có và đang ở chế độ GPP
+            if (scanMode === 'GPP' && !invoiceNumber.trim()) {
+              setIsScanningInvoice(true);
+              try {
+                const foundNumber = await scanInvoiceNumber(base64);
+                if (foundNumber && foundNumber.trim()) {
+                  setInvoiceNumber(foundNumber.trim());
+                  toast.success(`Đã tìm thấy số hóa đơn: ${foundNumber}`, { icon: '🔍' });
+                }
+              } catch (scanErr) {
+                console.warn("Lỗi scan số HĐ:", scanErr);
+              } finally {
+                setIsScanningInvoice(false);
+              }
+            }
+
             // Quét lỗi mờ, lóa bằng Gemini Flash Lite (Chi phí siêu rẻ)
             const quality = await checkImageQuality(base64);
             
@@ -200,7 +223,55 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
         reader.readAsDataURL(file);
       });
     }
-  }, []);
+  }, [scanMode, invoiceNumber]);
+
+  const [isInvoiceDuplicate, setIsInvoiceDuplicate] = useState(false);
+
+  // Kiểm tra trùng mã hóa đơn ngay khi nhập hoặc AI quét xong
+  useEffect(() => {
+    if (!invoiceNumber.trim()) {
+      setIsInvoiceDuplicate(false);
+      return;
+    }
+
+    const checkDuplicate = async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, pharmacy, order_name')
+        .eq('invoice_number', invoiceNumber.trim())
+        .limit(1);
+      
+      if (!error && data && data.length > 0) {
+        setIsInvoiceDuplicate(true);
+      } else {
+        setIsInvoiceDuplicate(false);
+      }
+    };
+
+    const timer = setTimeout(checkDuplicate, 500);
+    return () => clearTimeout(timer);
+  }, [invoiceNumber]);
+
+  // Tự động quét hóa đơn khi chuyển sang chế độ GPP nếu đã có ảnh mà chưa có số HĐ
+  useEffect(() => {
+    if (scanMode === 'GPP' && !invoiceNumber.trim() && previews.length > 0 && !isScanningInvoice) {
+      const scanFirstImage = async () => {
+        setIsScanningInvoice(true);
+        try {
+          const foundNumber = await scanInvoiceNumber(previews[0]);
+          if (foundNumber && foundNumber.trim()) {
+            setInvoiceNumber(foundNumber.trim());
+            toast.success(`Đã tìm thấy số hóa đơn: ${foundNumber}`, { icon: '🔍' });
+          }
+        } catch (err) {
+          console.warn("Auto-scan error on mode switch:", err);
+        } finally {
+          setIsScanningInvoice(false);
+        }
+      };
+      scanFirstImage();
+    }
+  }, [scanMode]);
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
@@ -243,6 +314,33 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
       return;
     }
 
+    if (scanMode === 'GPP' && !invoiceNumber.trim()) {
+      toast.error("Vui lòng nhập số hóa đơn khi chọn chế độ NHẬP GPP.");
+      return;
+    }
+
+    // KIỂM TRA TRÙNG MÃ HÓA ĐƠN NGAY TẠI ĐÂY (TRƯỚC KHI TẢI ẢNH)
+    if (invoiceNumber.trim()) {
+      setUploading(true);
+      const { data: existing, error: checkError } = await supabase
+        .from('orders')
+        .select('id, pharmacy, order_name, created_at')
+        .eq('invoice_number', invoiceNumber.trim())
+        .limit(1);
+      
+      if (checkError) {
+        console.warn("Lỗi kiểm tra mã HĐ:", checkError);
+      } else if (existing && existing.length > 0) {
+        setUploading(false);
+        toast.error(`Trùng mã hóa đơn!`, {
+          description: `Mã "${invoiceNumber.trim()}" đã được dùng cho đơn "${existing[0].order_name}" tại ${existing[0].pharmacy}. Vui lòng kiểm tra lại.`,
+          duration: 6000
+        });
+        return;
+      }
+      setUploading(false);
+    }
+
     setUploading(true);
     const loadingToast = toast.loading("Đang nén & Nâng cao độ nét AI...");
     
@@ -282,11 +380,17 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
       toast.loading("Đang lưu đơn hàng vào hệ thống...", { id: loadingToast });
 
       // Insert into Supabase table 'orders'
-      const orderPayload = {
+      const now = new Date();
+      const finalDate = isThuan ? new Date(submitDate) : now;
+      const monthYear = format(finalDate, 'MM-yyyy'); // Format MM-YYYY for storage consistency
+
+      const orderPayload: any = {
         image_urls: uploadedUrls,
         order_name: orderName.trim(),
         sender_name: userName,
         pharmacy: pharmacy,
+        invoice_number: invoiceNumber.trim() || null,
+        month_year: monthYear,
         has_recorded_entry: true,
         has_recorded_batch_info: true,
         note: note.trim(),
@@ -294,19 +398,34 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
         scan_mode: scanMode
       };
 
+      if (isThuan) {
+         // Cố gắng ghi đè created_at nếu là Thuận, kèm theo giờ hiện tại
+         const timeStr = format(now, "HH:mm:ss");
+         orderPayload.created_at = `${submitDate}T${timeStr}`;
+      }
+
       let { error: insertError } = await supabase
         .from('orders')
         .insert(orderPayload);
 
-      // Handle missing 'scan_mode' column error (PGRST204)
-      if (insertError && (insertError.code === 'PGRST204' || insertError.message?.includes('scan_mode'))) {
-        console.warn("Scan mode column not found in database. Retrying with mode in notes...");
-        const { scan_mode, ...legacyPayload } = orderPayload;
-        // Prepend to note for permanent visibility
-        legacyPayload.note = `[NHẬP ${scan_mode.toUpperCase()}]\n${legacyPayload.note}`;
+      // Handle missing 'scan_mode', 'month_year' or column permission errors
+      if (insertError && (insertError.code === 'PGRST204' || insertError.code === '42703' || insertError.code === '42501' || insertError.message?.includes('created_at') || insertError.message?.includes('scan_mode') || insertError.message?.includes('month_year'))) {
+        console.warn("Possible column collision or missing column. Retrying with safe payload...");
+        const { scan_mode, created_at, month_year, ...safePayload } = orderPayload;
+        
+        let extraNote = "";
+        if (scan_mode) extraNote += `[NHẬP ${scan_mode.toUpperCase()}] `;
+        if (isThuan && submitDate) extraNote += `[NGÀY CHỈNH: ${submitDate}] `;
+        if (month_year) extraNote += `[THÁNG: ${month_year}] `;
+        
+        const finalPayload = { 
+          ...safePayload, 
+          note: extraNote ? `${extraNote}\n${safePayload.note}` : safePayload.note 
+        };
+        
         const { error: retryError } = await supabase
           .from('orders')
-          .insert(legacyPayload);
+          .insert(finalPayload);
         insertError = retryError;
       }
 
@@ -505,7 +624,7 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
           </div>
 
           <div className="space-y-2">
-            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">LOẠI NHẬP HÀNG</label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">NHẬP CHO PM</label>
             <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 rounded-xl">
               <button
                 type="button"
@@ -537,54 +656,99 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
           </div>
 
           <div className="grid gap-4">
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">TÊN NHÀ CUNG CẤP</label>
-              <div className="relative">
-                <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
-                <Input 
-                  placeholder="Nhập tên nhà cung cấp..." 
-                  className="rounded-xl pl-10 focus-visible:ring-zinc-900 h-11 text-sm border-zinc-200 shadow-sm"
-                  value={orderName}
-                  onChange={(e) => {
-                    setOrderName(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => {
-                    // Refresh suggestions on focus even if empty
-                    setShowSuggestions(true);
-                  }}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
-                />
-                
-                <AnimatePresence>
-                  {showSuggestions && (orderName.trim().length > 0 || filteredSuggestions.length > 0) && filteredSuggestions.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      className="absolute left-0 right-0 top-full mt-1.5 z-[60] overflow-hidden rounded-xl border border-zinc-100 bg-white shadow-[0_10px_40px_-5px_rgba(0,0,0,0.1)] py-1"
-                    >
-                      {filteredSuggestions.map((suggestion, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-zinc-50 transition-colors group"
-                          onClick={() => {
-                            setOrderName(suggestion);
-                            setShowSuggestions(false);
-                          }}
-                        >
-                          <div className="h-5 w-5 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors">
-                            <Package className="h-3 w-3" />
-                          </div>
-                          <span className="font-medium text-zinc-700 group-hover:text-zinc-900">{suggestion}</span>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            <div className={cn("grid gap-4", scanMode === 'GPP' ? "grid-cols-2" : "grid-cols-1")}>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">TÊN NHÀ CUNG CẤP</label>
+                <div className="relative">
+                  <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
+                  <Input 
+                    placeholder="Nhập tên NCC..." 
+                    className="rounded-xl pl-10 focus-visible:ring-zinc-900 h-11 text-sm border-zinc-200 shadow-sm"
+                    value={orderName}
+                    onChange={(e) => {
+                      setOrderName(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
+                  />
+                  
+                  <AnimatePresence>
+                    {showSuggestions && (orderName.trim().length > 0 || filteredSuggestions.length > 0) && filteredSuggestions.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="absolute left-0 right-0 top-full mt-1.5 z-[60] overflow-hidden rounded-xl border border-zinc-100 bg-white shadow-[0_10px_40px_-5px_rgba(0,0,0,0.1)] py-1"
+                      >
+                        {filteredSuggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-zinc-50 transition-colors group"
+                            onClick={() => {
+                              setOrderName(suggestion);
+                              setShowSuggestions(false);
+                            }}
+                          >
+                            <div className="h-5 w-5 rounded-md bg-zinc-100 flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-colors">
+                              <Package className="h-3 w-3" />
+                            </div>
+                            <span className="font-medium text-zinc-700 group-hover:text-zinc-900">{suggestion}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
+
+              {scanMode === 'GPP' && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-red-500 px-1 flex items-center gap-1">
+                    MÃ HÓA ĐƠN
+                    {isScanningInvoice && <Loader2 className="h-3 w-3 animate-spin ml-2 text-emerald-500" />}
+                  </label>
+                  <div className="relative">
+                    {isScanningInvoice ? (
+                      <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin" />
+                    ) : (
+                      <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
+                    )}
+                    <Input 
+                      placeholder={isScanningInvoice ? "AI đang quét..." : "Số HĐ..."} 
+                      className={cn(
+                        "rounded-xl pl-10 h-11 text-sm shadow-sm transition-all focus-visible:ring-red-500 border-red-100 bg-red-50/20",
+                        isScanningInvoice && "border-emerald-200 bg-emerald-50/20 ring-1 ring-emerald-100",
+                        isInvoiceDuplicate && "border-red-500 bg-red-50 ring-1 ring-red-200"
+                      )}
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                    />
+                    {isInvoiceDuplicate && (
+                      <div className="absolute -bottom-5 left-1 flex items-center gap-1 text-[9px] font-bold text-red-600 animate-pulse">
+                        <AlertTriangle className="h-3 w-3" />
+                        MÃ HÓA ĐƠN NÀY ĐÃ TỒN TẠI!
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {isThuan && (
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">NGÀY GỬI ĐƠN (Dành cho Thuận)</label>
+                <div className="relative">
+                  <Input 
+                    type="date"
+                    className="rounded-xl focus-visible:ring-zinc-900 h-11 text-sm border-zinc-200 shadow-sm"
+                    value={submitDate}
+                    onChange={(e) => setSubmitDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">Ghi chú bổ sung</label>

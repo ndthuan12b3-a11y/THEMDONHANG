@@ -6,6 +6,9 @@ export interface Order {
   imageUrl?: string; // For backward compatibility
   orderName: string;
   senderName: string;
+  invoiceNumber?: string;
+  monthYear?: string;
+  customDate?: string;
   pharmacy: PharmacyName;
   hasRecordedEntry: boolean;
   hasRecordedBatchInfo: boolean;

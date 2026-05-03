@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, memo, Suspense, lazy } from 'react';
 import { supabase } from './supabase';
 import { format, isToday, isYesterday } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -40,12 +40,16 @@ import { cn } from '@/lib/utils';
 
 // New Components & Types
 import { Order, PharmacyName, PHARMACIES, PHARMACY_GROUPS } from './types';
-import { OrderCard } from './components/OrderCard';
-import { UploadForm } from './components/UploadForm';
 import { GridSkeleton } from './components/SkeletonLoader';
 import { initOneSignal, subscribeToNotifications, checkOneSignalAvailable, isSubscribedToOneSignal } from './lib/onesignal';
-import { SystemLogsModal, logUserActivity } from './components/SystemLogsModal';
-import { HuoctsiHub } from './components/HuoctsiHub';
+
+// Lazy load non-critical UI components
+const OrderCard = lazy(() => import('./components/OrderCard').then(m => ({ default: m.OrderCard })));
+const UploadForm = lazy(() => import('./components/UploadForm').then(m => ({ default: m.UploadForm })));
+const SystemLogsModal = lazy(() => import('./components/SystemLogsModal').then(m => ({ default: m.SystemLogsModal })));
+const HuoctsiHub = lazy(() => import('./components/HuoctsiHub').then(m => ({ default: m.HuoctsiHub })));
+
+import { logUserActivity } from './components/SystemLogsModal';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -67,6 +71,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedPharmacy, setSelectedPharmacy] = useState<PharmacyName>('Hưng Thịnh');
   const [selectedGroupName, setSelectedGroupName] = useState(PHARMACY_GROUPS[0].name);
@@ -74,6 +79,8 @@ export default function App() {
   const [isUserPromptOpen, setIsUserPromptOpen] = useState(false);
   const [tempUserName, setTempUserName] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [monthFilter, setMonthFilter] = useState<string>(format(new Date(), 'MM-yyyy'));
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [notifications, setNotifications] = useState<{id: string, title: string, body: string, time: Date, read: boolean}[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -83,6 +90,14 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const isAppModalOpen = isUploadOpen || isUserPromptOpen || isSystemLogsOpen;
+
+  // Debounce search query to improve filtering performance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     // Permission check
@@ -188,16 +203,110 @@ export default function App() {
     }
   };
 
+  // Fetch Available Months (for filter dropdown)
+  useEffect(() => {
+    const fetchMonths = async () => {
+      // Try fetching month_year column
+      let { data, error } = await supabase.from('orders').select('month_year');
+      
+      const monthsSet = new Set<string>();
+      monthsSet.add(format(new Date(), 'MM-yyyy')); // Luôn có tháng hiện tại
+
+      if (error && error.code === '42703') {
+        // Fallback: use created_at if month_year is missing
+        console.warn("month_year column missing, falling back to created_at");
+        const { data: dateData } = await supabase.from('orders').select('created_at');
+        if (dateData) {
+          dateData.forEach(row => {
+            if (row.created_at) {
+              monthsSet.add(format(new Date(row.created_at), 'MM-yyyy'));
+            }
+          });
+        }
+      } else if (!error && data) {
+        data.forEach(row => {
+          if (row.month_year) {
+            // Chuẩn hóa: 4-2026 -> 04-2026 để hiển thị đẹp & nhất quán
+            const parts = row.month_year.split('-');
+            if (parts.length === 2) {
+              const normalized = `${parts[0].padStart(2, '0')}-${parts[1]}`;
+              monthsSet.add(normalized);
+            }
+          }
+        });
+      }
+      
+      setAvailableMonths(prev => {
+        const newArray = Array.from(monthsSet);
+        if (JSON.stringify(prev) === JSON.stringify(newArray)) return prev;
+        return newArray;
+      });
+    };
+    fetchMonths();
+  }, [orders.length]); // Only refresh when number of orders changes
+
   // Fetch Orders - Real-time sync
   useEffect(() => {
     const fetchOrdersData = async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
+      
+      let useClientFilter = false;
+      if (monthFilter !== 'all') {
+        const [m, y] = monthFilter.split('-');
+        const altFormat = `${parseInt(m)}-${y}`; // Handle legacy 4-2026 format
+        
+        // We try server-side query first, but if month_year is missing it will fail later
+        // In reality, if we KNOW it's missing we should skip this.
+        // But let's let it fail and handle in the error block for maximum compatibility.
+        query = query.or(`month_year.eq.${monthFilter},month_year.eq.${altFormat}`);
+      }
+      
+      let { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error("Supabase Error:", error);
+        
+        // If column missing OR query failed, fetch all and filter client-side
+        const { data: allData, error: retryError } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+        
+        if (!retryError) {
+           const processedOrders: Order[] = (allData || []).map(o => ({
+             id: o.id,
+             imageUrls: o.image_urls,
+             orderName: o.order_name,
+             senderName: o.sender_name,
+             invoiceNumber: o.invoice_number,
+             monthYear: o.month_year,
+             pharmacy: o.pharmacy as PharmacyName,
+             hasRecordedEntry: o.has_recorded_entry,
+             hasRecordedBatchInfo: o.has_recorded_batch_info,
+             note: o.note || '',
+             timestamp: { toDate: () => new Date(o.created_at) },
+             status: o.status,
+             completed_at: o.completed_at,
+             scan_mode: o.scan_mode
+           }));
+
+           // Client-side filtering as fallback
+           const filteredResults = monthFilter === 'all' 
+             ? processedOrders 
+             : processedOrders.filter(o => {
+                 // Check monthYear column first
+                 if (o.monthYear) {
+                    const [m, y] = monthFilter.split('-');
+                    const altFormat = `${parseInt(m)}-${y}`;
+                    if (o.monthYear === monthFilter || o.monthYear === altFormat) return true;
+                 }
+                 // Fallback: check created_at directly
+                 const date = new Date(o.timestamp.toDate());
+                 return format(date, 'MM-yyyy') === monthFilter;
+             });
+
+           setOrders(filteredResults);
+        }
+        setLoading(false);
         return;
       }
 
@@ -206,6 +315,8 @@ export default function App() {
         imageUrls: o.image_urls,
         orderName: o.order_name,
         senderName: o.sender_name,
+        invoiceNumber: o.invoice_number,
+        monthYear: o.month_year,
         pharmacy: o.pharmacy as PharmacyName,
         hasRecordedEntry: o.has_recorded_entry,
         hasRecordedBatchInfo: o.has_recorded_batch_info,
@@ -225,7 +336,11 @@ export default function App() {
     // Set up Realtime Subscription
     const channel = supabase
       .channel('public-orders-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'orders'
+      }, (payload) => {
         console.log('🔔 Realtime change detected! Event:', payload.eventType);
         fetchOrdersData();
 
@@ -299,7 +414,7 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [monthFilter]);
 
   // Auto Cleanup - Delete completed orders older than 7 days
   useEffect(() => {
@@ -331,15 +446,17 @@ export default function App() {
   }, []);
 
   const filteredOrders = useMemo(() => {
+    const search = debouncedSearch.toLowerCase().trim();
     return orders.filter(order => {
-      const matchesSearch = order.orderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           order.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           (order.note || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !search || 
+                           order.orderName.toLowerCase().includes(search) ||
+                           order.senderName.toLowerCase().includes(search) ||
+                           (order.note || '').toLowerCase().includes(search);
       const matchesPharmacy = order.pharmacy === selectedPharmacy;
       const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
       return matchesSearch && matchesPharmacy && matchesStatus;
     });
-  }, [orders, searchQuery, selectedPharmacy, statusFilter]);
+  }, [orders, debouncedSearch, selectedPharmacy, statusFilter]);
 
   const stats = useMemo(() => {
     const pharmacyOrders = orders.filter(o => o.pharmacy === selectedPharmacy);
@@ -378,6 +495,26 @@ export default function App() {
     // Capitalize the first letter (e.g., 'thứ ba' -> 'Thứ ba')
     return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
+
+  const monthOptions = useMemo(() => {
+    const options = availableMonths.map(val => {
+      const [m, y] = val.split('-');
+      return {
+        value: val,
+        label: `Tháng ${m}/${y}`
+      };
+    });
+
+    // Sắp xếp theo thời gian giảm dần
+    options.sort((a, b) => {
+      const [ma, ya] = a.value.split('-').map(Number);
+      const [mb, yb] = b.value.split('-').map(Number);
+      return (yb * 12 + mb) - (ya * 12 + ma);
+    });
+
+    options.push({ value: 'all', label: 'Tất cả thời gian' });
+    return options;
+  }, [availableMonths]);
 
   return (
     <div className={cn(
@@ -681,6 +818,19 @@ export default function App() {
 
                 <div className="w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0">
                   <div className="flex h-8 sm:h-9 items-center gap-1 p-1 rounded-xl sm:rounded-2xl shrink-0 bg-zinc-100/80 transition-colors w-max">
+                    <select 
+                      value={monthFilter}
+                      onChange={(e) => {
+                        setMonthFilter(e.target.value);
+                        setLoading(true);
+                      }}
+                      className="bg-transparent text-[10px] font-black uppercase tracking-widest px-2 focus:outline-none cursor-pointer"
+                    >
+                      {monthOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <div className="w-px h-4 bg-zinc-300 mx-1" />
                     {(['all', 'pending', 'completed'] as const).map((status) => (
                       <button
                         key={status}
@@ -774,17 +924,19 @@ export default function App() {
                           : "flex flex-col gap-3 sm:gap-4"
                       )}
                     >
-                      <AnimatePresence>
-                        {dateOrders.map((order) => (
-                           <OrderCard 
-                             key={order.id} 
-                             order={order} 
-                             viewMode={viewMode} 
-                             variants={itemVariants}
-                             currentUserName={userName || 'Người dùng'}
-                           />
-                        ))}
-                      </AnimatePresence>
+                      <Suspense fallback={<GridSkeleton viewMode={viewMode} count={4} />}>
+                        <AnimatePresence>
+                          {dateOrders.map((order) => (
+                             <OrderCard 
+                               key={order.id} 
+                               order={order} 
+                               viewMode={viewMode} 
+                               variants={itemVariants}
+                               currentUserName={userName || 'Người dùng'}
+                             />
+                          ))}
+                        </AnimatePresence>
+                      </Suspense>
                     </motion.div>
                   </section>
                 ))}
@@ -800,7 +952,9 @@ export default function App() {
             transition={{ duration: 0.15 }}
             className="col-start-1 row-start-1 w-full flex flex-col will-change-opacity"
           >
-             <HuoctsiHub onClose={() => setSelectedPharmacy('Hưng Thịnh')} />
+             <Suspense fallback={<div className="h-screen w-full flex items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-zinc-300" /></div>}>
+                <HuoctsiHub onClose={() => setSelectedPharmacy('Hưng Thịnh')} />
+             </Suspense>
           </motion.main>
         )}
       </AnimatePresence>
@@ -833,12 +987,14 @@ export default function App() {
                       </DialogHeader>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-4 sm:pt-4 custom-scrollbar">
-                      <UploadForm 
-                          defaultPharmacy={selectedPharmacy} 
-                          userName={userName || 'Người dùng'} 
-                          onSuccess={() => setIsUploadOpen(false)} 
-                          availablePharmacies={PHARMACY_GROUPS[0].pharmacies.filter(p => p.name !== 'HĐ THUOCSI')}
-                      />
+                      <Suspense fallback={<div className="p-10 flex flex-col items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-zinc-300 mb-2" /><p className="text-xs text-zinc-400">Đang tải trình tải lên...</p></div>}>
+                        <UploadForm 
+                            defaultPharmacy={selectedPharmacy} 
+                            userName={userName || 'Người dùng'} 
+                            onSuccess={() => setIsUploadOpen(false)} 
+                            availablePharmacies={PHARMACY_GROUPS[0].pharmacies.filter(p => p.name !== 'HĐ THUOCSI')}
+                        />
+                      </Suspense>
                     </div>
                 </DialogContent>
               </Dialog>
@@ -885,10 +1041,12 @@ export default function App() {
         </DialogContent>
       </Dialog>
 
-      <SystemLogsModal 
-        isOpen={isSystemLogsOpen}
-        onClose={() => setIsSystemLogsOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <SystemLogsModal 
+          isOpen={isSystemLogsOpen}
+          onClose={() => setIsSystemLogsOpen(false)}
+        />
+      </Suspense>
     </div>
   );
 }

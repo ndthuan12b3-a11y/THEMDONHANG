@@ -151,6 +151,54 @@ If a printed character (e.g., number '0' or letter 'a') does not have crisp, hig
   }
 };
 
+export const scanInvoiceNumber = async (imageBase64: string): Promise<string | null> => {
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      invoice_number: { type: Type.STRING }
+    },
+    required: ["invoice_number"]
+  };
+
+  const prompt = `**System Instructions:**
+**Role:** Expert Invoice Scanner.
+
+**Task:** Extract the Invoice Number (Số hóa đơn) from the provided image.
+Look for patterns like:
+- "Số :" followed by 2 to 9 digits
+- "Số (No) :" followed by 2 to 9 digits
+- Or just "No:" or "Số:" at the top/header of the invoice.
+
+**Instructions:**
+1. If the invoice number is found, return it exactly as it appears.
+2. If not found, return an empty string or null.
+
+Return strictly valid JSON: { "invoice_number": "..." }`;
+
+  const ai = getAI();
+  try {
+    const response = await withRetry(() => ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: {
+        parts: [
+          { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] || imageBase64 } },
+          { text: prompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      }
+    }));
+
+    const parsed = JSON.parse(extractText(response));
+    return parsed.invoice_number || null;
+  } catch (error) {
+    console.error("Gemini Scan Invoice Number Error:", error);
+    return null;
+  }
+};
+
 export const scanInvoice = async (
   imagesBase64: string[],
   mode: 'SAPO' | 'GPP'

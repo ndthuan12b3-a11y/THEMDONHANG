@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,6 +10,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
+  app.use(compression());
   const PORT = 3000;
 
   // Initialize Supabase Admin for backend triggers

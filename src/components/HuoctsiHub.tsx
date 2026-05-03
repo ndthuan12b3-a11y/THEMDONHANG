@@ -38,6 +38,7 @@ interface Invoice {
   ever_blacklisted: boolean;
   created_at: string;
   deleted_at?: string;
+  invoice_number?: string;
 }
 
 const removeVietnameseTones = (str: string) => {
@@ -81,6 +82,8 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
   const [currentPharmacy, setCurrentPharmacy] = useState('NT Tuệ Thiện');
   const [filterType, setFilterType] = useState<'all' | 'pending' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [monthFilter, setMonthFilter] = useState<string>(format(new Date(), 'MM-yyyy'));
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -93,6 +96,7 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
   // Form state
   const [formName, setFormName] = useState('');
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [formInvoiceNumber, setFormInvoiceNumber] = useState('');
   const [formLink, setFormLink] = useState('');
   const [formNote, setFormNote] = useState('');
 
@@ -100,6 +104,33 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
 
   // Fetch data and setup real-time
   useEffect(() => {
+    const fetchAvailableMonths = async () => {
+      // Trying to fetch the date column
+      const { data, error } = await supabase.from('medx_invoices').select('date');
+      
+      const monthsSet = new Set<string>();
+      monthsSet.add(format(new Date(), 'MM-yyyy'));
+      
+      if (!error && data) {
+        data.forEach(row => {
+          if (row.date) {
+            const d = new Date(row.date);
+            if (!isNaN(d.getTime())) {
+              monthsSet.add(format(d, 'MM-yyyy'));
+            }
+          }
+        });
+      } else if (error) {
+         console.warn("Lỗi khi lấy danh sách tháng cho hóa đơn:", error);
+      }
+      
+      setAvailableMonths(prev => {
+        const newArray = Array.from(monthsSet);
+        if (JSON.stringify(prev) === JSON.stringify(newArray)) return prev;
+        return newArray;
+      });
+    };
+    fetchAvailableMonths();
     fetchInvoices();
 
     const channel = supabase
@@ -117,19 +148,46 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [monthFilter]); // Refetch when month filter changes, realtime handles other updates
 
   const fetchInvoices = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medx_invoices')
-        .select('*')
+        .select('*');
+      
+      if (monthFilter !== 'all') {
+        const [month, year] = monthFilter.split('-');
+        const startDate = `${year}-${month.padStart(2, '0')}-01`;
+        const endDate = `${year}-${month.padStart(2, '0')}-31`;
+        query = query.gte('date', startDate).lte('date', endDate);
+      }
+
+      const { data, error } = await query
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setInvoices(data || []);
+      if (error) {
+        console.error('Fetch error:', error);
+        // Fallback: If query fails (likely due to missing column), fetch all and filter locally
+        const { data: fallbackData } = await supabase.from('medx_invoices').select('*').order('date', { ascending: false });
+        
+        let results = (fallbackData || []).map(inv => ({
+            ...inv,
+            // Ensure date is string if it comes back as something else
+            date: inv.date || format(new Date(inv.created_at || Date.now()), 'yyyy-MM-dd')
+        }));
+
+        if (monthFilter !== 'all') {
+          const [month, year] = monthFilter.split('-');
+          // local filter for YYYY-MM-DD string
+          results = results.filter(inv => inv.date && inv.date.startsWith(`${year}-${month.padStart(2, '0')}`));
+        }
+        setInvoices(results);
+      } else {
+        setInvoices(data || []);
+      }
       
       // Clear alerts after successful fetch
       if (data && data.length > 0) {
@@ -206,16 +264,32 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
           .update({
             name: formName,
             date: formDate,
+            invoice_number: formInvoiceNumber.trim() || null,
             link: formLink,
             note: formNote
           })
           .eq('id', editingInvoice.id);
         if (error) throw error;
       } else {
+        // Duplicate check
+        if (formInvoiceNumber.trim()) {
+          const { data: existing } = await supabase
+            .from('medx_invoices')
+            .select('id, pharmacy')
+            .eq('invoice_number', formInvoiceNumber.trim())
+            .limit(1);
+          
+          if (existing && existing.length > 0) {
+            const confirmRes = window.confirm(`⚠️ CẢNH BÁO: Mã hóa đơn "${formInvoiceNumber.trim()}" đã tồn tại trong hệ thống (tại ${existing[0].pharmacy}). Bạn có chắc chắn muốn tiếp tục gửi không?`);
+            if (!confirmRes) return;
+          }
+        }
+
         const names = formName.split('\n').filter(n => n.trim() !== "");
         const newRecords = names.map(name => ({
           name: name.trim(),
           date: formDate,
+          invoice_number: formInvoiceNumber.trim() || null,
           link: formLink,
           note: formNote,
           pharmacy: currentPharmacy,
@@ -492,6 +566,7 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
     setEditingInvoice(null);
     setFormName('');
     setFormDate(format(new Date(), 'yyyy-MM-dd'));
+    setFormInvoiceNumber('');
     setFormLink('');
     setFormNote('');
     setIsFormOpen(true);
@@ -501,10 +576,31 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
     setEditingInvoice(invoice);
     setFormName(invoice.name);
     setFormDate(invoice.date);
+    setFormInvoiceNumber(invoice.invoice_number || '');
     setFormLink(invoice.link || '');
     setFormNote(invoice.note || '');
     setIsFormOpen(true);
   };
+
+    const monthOptions = useMemo(() => {
+    const options = availableMonths.map(val => {
+      const [m, y] = val.split('-');
+      return {
+        value: val,
+        label: `Tháng ${m}/${y}`
+      };
+    });
+
+    // Sort descending
+    options.sort((a, b) => {
+      const [ma, ya] = a.value.split('-').map(Number);
+      const [mb, yb] = b.value.split('-').map(Number);
+      return (yb * 12 + mb) - (ya * 12 + ma);
+    });
+
+    options.push({ value: 'all', label: 'Tất cả thời gian' });
+    return options;
+  }, [availableMonths]);
 
   if (isInitialLoading) {
     return (
@@ -636,9 +732,22 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
             />
           </div>
 
-          <div className="w-full lg:w-auto overflow-x-auto no-scrollbar pb-1">
+              <div className="w-full lg:w-auto overflow-x-auto no-scrollbar pb-1">
             <div className="flex items-center gap-3 w-max">
               <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md">
+                <select 
+                  value={monthFilter}
+                  onChange={(e) => {
+                    setMonthFilter(e.target.value);
+                    setLoading(true);
+                  }}
+                  className="bg-transparent text-[11px] font-bold uppercase tracking-widest px-3 focus:outline-none cursor-pointer text-white/60 hover:text-white"
+                >
+                  {monthOptions.map(opt => (
+                    <option key={opt.value} value={opt.value} className="bg-[#020617] text-white">{opt.label}</option>
+                  ))}
+                </select>
+                <div className="w-px h-4 bg-white/10 my-auto mx-1" />
                 {[
                   { id: 'all', label: 'Tất cả' },
                   { id: 'pending', label: 'Chờ' },
@@ -785,6 +894,11 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
                                       >
                                         {item.name}
                                       </span>
+                                      {item.invoice_number && (
+                                        <p className="text-[10px] font-black text-blue-400/60 uppercase tracking-widest mt-1">
+                                          Số HĐ: {item.invoice_number}
+                                        </p>
+                                      )}
                                       {item.note && (
                                         <p id={`invoice-note-${item.id}`} className="text-[13px] text-white/70 font-medium mt-2.5 bg-white/5 px-3 py-2 rounded-lg border border-white/10 inline-block w-full backdrop-blur-sm">
                                           <span className="mr-2 opacity-70">📝</span>{item.note}
@@ -1004,6 +1118,16 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
         {isFormOpen && (
           <Modal close={() => setIsFormOpen(false)} title={editingInvoice ? "Sửa Hóa Đơn" : "Thêm Hóa Đơn Mới"}>
             <form onSubmit={handleSave} className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-bold text-white/50 uppercase mb-2 tracking-widest">Mã hóa đơn (Check trùng)</label>
+                <input 
+                  type="text" 
+                  value={formInvoiceNumber}
+                  onChange={(e) => setFormInvoiceNumber(e.target.value)}
+                  className="w-full p-4 rounded-xl glass-input font-medium text-[15px]" 
+                  placeholder="X-XXXXXX"
+                />
+              </div>
               <div>
                 <label className="block text-[10px] font-bold text-white/50 uppercase mb-2 tracking-widest">Nhà cung cấp (Mỗi dòng 1 nhà)</label>
                 <textarea 

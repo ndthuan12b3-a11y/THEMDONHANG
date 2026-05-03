@@ -88,10 +88,14 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
   const [isEditing, setIsEditing] = useState(false);
   
   const [editOrderName, setEditOrderName] = useState(order.orderName);
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState(order.invoiceNumber || '');
   const [editPharmacy, setEditPharmacy] = useState<PharmacyName>(order.pharmacy);
   const [editNote, setEditNote] = useState(order.note || '');
   const [editScanMode, setEditScanMode] = useState<'SAPO' | 'GPP' | undefined>(order.scan_mode);
+  const [editDate, setEditDate] = useState(order.timestamp ? format(order.timestamp.toDate(), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
   const [isScanOpen, setIsScanOpen] = useState(false);
+
+  const isThuan = currentUserName.toLowerCase().includes('thuận');
 
   const pharmacyConfig = PHARMACIES.find(p => p.name === order.pharmacy) || PHARMACIES[0];
   const imageUrls = order.imageUrls || (order.imageUrl ? [order.imageUrl] : []);
@@ -128,26 +132,39 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
   const handleUpdate = async () => {
     try {
+      const updatePayload: any = {
+        order_name: editOrderName,
+        invoice_number: editInvoiceNumber.trim() || null,
+        pharmacy: editPharmacy,
+        note: editNote,
+        scan_mode: editScanMode ?? null
+      };
+
+      if (isThuan) {
+        // Cập nhật ngày gửi và tháng lọc nếu là Thuận
+        const originalTime = order.timestamp ? format(order.timestamp.toDate(), 'HH:mm:ss') : "12:00:00";
+        updatePayload.created_at = `${editDate}T${originalTime}`;
+        updatePayload.month_year = format(new Date(editDate), 'MM-yyyy');
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({
-          order_name: editOrderName,
-          pharmacy: editPharmacy,
-          note: editNote,
-          scan_mode: editScanMode ?? null
-        })
+        .update(updatePayload)
         .eq('id', order.id);
 
       if (error) {
-        // Handle missing column for scan_mode if it still fails here
-        if (error.code === 'PGRST204' || error.message?.includes('scan_mode')) {
+        // Handle missing column for scan_mode or created_at if permissions are weird
+        if (error.code === 'PGRST204' || error.code === '42703' || error.message?.includes('scan_mode') || error.message?.includes('month_year')) {
+           const { scan_mode, month_year, created_at, ...fallbackPayload } = updatePayload;
+           
+           // If we can't update created_at directly, put it in the note
+           if (isThuan && editDate) {
+             fallbackPayload.note = `[SỬA NGÀY: ${editDate}]\n${fallbackPayload.note}`;
+           }
+
            const { error: retryError } = await supabase
             .from('orders')
-            .update({
-              order_name: editOrderName,
-              pharmacy: editPharmacy,
-              note: editNote
-            })
+            .update(fallbackPayload)
             .eq('id', order.id);
            if (retryError) throw retryError;
         } else {
@@ -323,6 +340,12 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
             <div className="flex items-center gap-1.5 text-[10px] sm:text-sm text-zinc-500">
               <UserIcon className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
               <span className="truncate">{order.senderName}</span>
+              {order.invoiceNumber && (
+                <div className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black border border-emerald-100 shadow-sm">
+                  <FileText className="h-3 w-3" />
+                  <span>HĐ: {order.invoiceNumber}</span>
+                </div>
+              )}
             </div>
             {order.note && (
               <div className="mt-2 rounded-lg bg-zinc-50 p-2 text-xs text-zinc-600 line-clamp-2 italic">
@@ -429,6 +452,17 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                   className="rounded-xl h-11"
                 />
               </div>
+              {isThuan && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ngày gửi đơn (Dành cho Thuận)</label>
+                  <Input 
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="rounded-xl h-11"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nhà thuốc</label>
                 <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">
@@ -587,9 +621,17 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
           <h3 className="mt-1 font-bold text-zinc-900 line-clamp-1">{order.orderName}</h3>
         </CardHeader>
         <CardContent className="p-4 pt-2 space-y-3">
-          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-            <UserIcon className="h-3 w-3" />
-            <span>Người gửi: {order.senderName}</span>
+          <div className="flex items-center justify-between text-xs text-zinc-500">
+            <div className="flex items-center gap-1.5">
+              <UserIcon className="h-3 w-3" />
+              <span>{order.senderName}</span>
+            </div>
+            {order.invoiceNumber && (
+              <div className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-[10px] font-black border border-emerald-100 shadow-sm">
+                <FileText className="h-3 w-3" />
+                <span>HĐ: {order.invoiceNumber}</span>
+              </div>
+            )}
           </div>
           {order.note && (
             <div className="rounded-xl bg-zinc-50 p-2.5 text-[11px] text-zinc-600 italic border border-zinc-100 line-clamp-3">
@@ -678,14 +720,36 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
                 <DialogTitle>Chỉnh sửa đơn hàng</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">TÊN NHÀ CUNG CẤP</label>
-                  <Input 
-                    value={editOrderName}
-                    onChange={(e) => setEditOrderName(e.target.value)}
-                    className="rounded-xl h-11"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">TÊN NHÀ CUNG CẤP</label>
+                    <Input 
+                      value={editOrderName}
+                      onChange={(e) => setEditOrderName(e.target.value)}
+                      className="rounded-xl h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">MÃ HÓA ĐƠN</label>
+                    <Input 
+                      value={editInvoiceNumber}
+                      onChange={(e) => setEditInvoiceNumber(e.target.value)}
+                      className="rounded-xl h-11 border-zinc-200"
+                      placeholder="Số HĐ..."
+                    />
+                  </div>
                 </div>
+                {isThuan && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ngày gửi đơn (Dành cho Thuận)</label>
+                    <Input 
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="rounded-xl h-11"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nhà thuốc</label>
                   <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">

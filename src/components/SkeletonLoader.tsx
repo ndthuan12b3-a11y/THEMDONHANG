@@ -42,14 +42,14 @@ export function OrderCardSkeleton({ viewMode }: OrderCardSkeletonProps) {
   );
 }
 
-export function GridSkeleton({ viewMode }: { viewMode: 'grid' | 'list' }) {
+export function GridSkeleton({ viewMode, count = 8 }: { viewMode: 'grid' | 'list', count?: number }) {
   return (
     <div className={cn(
       viewMode === 'grid' 
-        ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-        : "flex flex-col gap-4"
+        ? "grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
+        : "flex flex-col gap-3 sm:gap-4"
     )}>
-      {[...Array(8)].map((_, i) => (
+      {[...Array(count)].map((_, i) => (
         <OrderCardSkeleton key={i} viewMode={viewMode} />
       ))}
     </div>
