@@ -983,7 +983,7 @@ export default function App() {
                 <DialogContent className="sm:max-w-xl w-[95vw] sm:w-full max-h-[85vh] flex flex-col p-0 overflow-hidden !rounded-3xl border-none">
                     <div className="p-4 sm:p-6 pb-2 shrink-0 border-b border-zinc-100">
                       <DialogHeader>
-                          <DialogTitle className="text-lg sm:text-xl font-black uppercase tracking-tight text-center sm:text-left">NHẬP TÊN NHÀ CUNG CẤP</DialogTitle>
+                          <DialogTitle className="text-lg sm:text-xl font-black uppercase tracking-tight text-center sm:text-left">TẠO ĐƠN MỚI</DialogTitle>
                       </DialogHeader>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-4 sm:pt-4 custom-scrollbar">

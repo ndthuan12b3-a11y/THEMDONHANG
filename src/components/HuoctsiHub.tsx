@@ -876,11 +876,17 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
                                         toggleComplete(item.id, item.completed);
                                       }}
                                       className={cn(
-                                        "w-10 h-10 min-w-[40px] rounded-full border flex items-center justify-center transition-all mt-0.5",
-                                        item.completed ? "bg-green-500/80 border-green-400 text-white shadow-lg" : "bg-white/5 border-white/20 text-white/30 hover:border-white/50 hover:bg-white/10"
+                                        "h-10 border flex items-center justify-center transition-all mt-0.5 shrink-0",
+                                        item.completed 
+                                          ? "px-2.5 rounded-xl bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-sm" 
+                                          : "w-10 min-w-[40px] rounded-full bg-white/5 border-white/20 text-white/30 hover:border-white/50 hover:bg-white/10"
                                       )}
                                     >
-                                      {item.completed && <Check size={20} />}
+                                      {item.completed ? (
+                                        <span className="text-[9px] font-black uppercase tracking-tighter leading-none italic">ĐÃ NHẬP</span>
+                                      ) : (
+                                        <Check size={20} />
+                                      )}
                                     </button>
                                     
                                     <div className="flex-1 min-w-0">
@@ -1101,7 +1107,7 @@ export function HuoctsiHub({ onClose }: { onClose?: () => void }) {
                         "text-[10px] font-bold border px-2 py-1 rounded uppercase tracking-widest shrink-0 mt-0.5",
                         item.completed ? "text-green-400 bg-green-500/10 border-green-500/20" : "text-orange-400 bg-orange-500/10 border-orange-500/20"
                       )}>
-                        {item.completed ? '✓ Đã xong' : '⏳ Còn lại'}
+                        {item.completed ? 'ĐÃ NHẬP' : '⏳ CÒN LẠI'}
                       </span>
                     </div>
                     <div className="flex items-center mt-2 opacity-70">

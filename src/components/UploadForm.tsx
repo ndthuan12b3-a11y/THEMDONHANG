@@ -28,8 +28,16 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
   const [supplierHistory, setSupplierHistory] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
-  const [pharmacy, setPharmacy] = useState<PharmacyName>(defaultPharmacy);
+  const [pharmacy, setPharmacy] = useState<PharmacyName | ''>('');
   const [note, setNote] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '80px';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [note]);
   const [uploading, setUploading] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
   const [aiResults, setAiResults] = useState<Record<string, { isScanning: boolean, issues: string[], score?: number, verdict?: string }>>({});
@@ -309,8 +317,8 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (files.length === 0 || !orderName.trim()) {
-      toast.error("Vui lòng nhập đầy đủ thông tin và chọn ít nhất 1 ảnh.");
+    if (files.length === 0 || !orderName.trim() || !pharmacy) {
+      toast.error("Vui lòng nhập đầy đủ thông tin, chọn nhà thuốc và ít nhất 1 ảnh.");
       return;
     }
 
@@ -485,20 +493,23 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-1 space-y-6 min-h-0 no-scrollbar pb-6 pt-4">
             <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
-              <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400">Hình Ảnh</label>
-              <span className="text-[10px] text-zinc-400 font-medium">Đã chọn: {files.length}</span>
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Điều khiển đầu vào</label>
+              <div className="flex items-center gap-1.5 bg-emerald-50 text-[9px] font-black text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100">
+                <Sparkles className="h-2.5 w-2.5" />
+                <span>AI OPTIMIZED</span>
+              </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 border-emerald-500/10 bg-emerald-50/30 hover:bg-emerald-50/50 hover:border-emerald-500/20 transition-all group active:scale-[0.98]"
+                className="flex items-center justify-center p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/20 hover:bg-emerald-50/50 hover:border-emerald-400 transition-all group active:scale-[0.95]"
+                title="Chụp ảnh"
               >
-                <div className="p-3 rounded-full bg-emerald-100 text-emerald-600 group-hover:scale-110 transition-transform">
-                  <Camera className="h-6 w-6" />
+                <div className="h-9 w-9 flex items-center justify-center rounded-xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
+                  <Camera className="h-5 w-5" />
                 </div>
-                <span className="text-sm font-black text-emerald-900">CHỤP ẢNH</span>
                 <input 
                   ref={cameraInputRef}
                   type="file" 
@@ -512,19 +523,19 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
               <div 
                 onClick={openLibrary}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 transition-all cursor-pointer active:scale-[0.98]",
-                  "border-zinc-100 bg-zinc-50/50 hover:bg-zinc-100/50 hover:border-zinc-200"
+                  "flex items-center justify-center p-3 rounded-xl border border-dashed transition-all cursor-pointer active:scale-[0.95] group",
+                  "border-zinc-300 bg-white hover:bg-zinc-50 hover:border-zinc-400"
                 )}
+                title="Thư viện"
               >
-                <div className="p-3 rounded-full bg-zinc-200 text-zinc-500 group-hover:scale-110 transition-transform">
-                  <ImageIcon className="h-6 w-6" />
+                <div className="h-9 w-9 flex items-center justify-center rounded-xl bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 group-hover:scale-110 transition-transform">
+                  <ImageIcon className="h-5 w-5" />
                 </div>
-                <span className="text-sm font-black text-zinc-900">THƯ VIỆN</span>
               </div>
             </div>
 
             {previews.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 mt-4 p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
+              <div className="grid grid-cols-4 gap-2 mt-2 p-2 bg-zinc-50/50 rounded-xl border border-dashed border-zinc-200">
                 {previews.map((src, index) => {
                   const file = files[index];
                   const aiKey = file ? `${file.name}_${file.size}` : '';
@@ -623,37 +634,54 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">NHẬP CHO PM</label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setScanMode('SAPO')}
-                className={cn(
-                  "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
-                  scanMode === 'SAPO' 
-                    ? "bg-zinc-900 text-white shadow-md shadow-zinc-200" 
-                    : "text-zinc-500 hover:text-zinc-900 bg-transparent"
-                )}
+          <AnimatePresence>
+            {pharmacy && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-4 overflow-hidden"
               >
-                <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'SAPO' ? "text-emerald-400" : "text-zinc-400")} />
-                SAPO
-              </button>
-              <button
-                type="button"
-                onClick={() => setScanMode('GPP')}
-                className={cn(
-                  "py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center",
-                  scanMode === 'GPP' 
-                    ? "bg-red-600 text-white shadow-md shadow-red-200" 
-                    : "text-zinc-500 hover:text-zinc-900 bg-transparent"
-                )}
-              >
-                <Sparkles className={cn("h-3.5 w-3.5", scanMode === 'GPP' ? "text-red-400" : "text-zinc-400")} />
-                GPP
-              </button>
-            </div>
-          </div>
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">PHƯƠNG THỨC XỬ LÝ</label>
+                </div>
+                <div className="grid grid-cols-2 gap-2 p-1.5 bg-zinc-100/50 border border-zinc-200/50 rounded-2xl relative overflow-hidden backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={() => setScanMode('SAPO')}
+                    className={cn(
+                      "relative py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all gap-2 flex items-center justify-center group",
+                      scanMode === 'SAPO' 
+                        ? "bg-zinc-900 text-white shadow-xl shadow-zinc-950/20" 
+                        : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                    )}
+                  >
+                    {scanMode === 'SAPO' && (
+                      <motion.div layoutId="scanModeBg" className="absolute inset-0 bg-zinc-900 rounded-xl -z-10" />
+                    )}
+                    <Sparkles className={cn("h-3.5 w-3.5 mb-0.5 transition-colors", scanMode === 'SAPO' ? "text-emerald-400" : "text-zinc-400")} />
+                    <span className="relative">SAPO</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScanMode('GPP')}
+                    className={cn(
+                      "relative py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all gap-2 flex items-center justify-center group",
+                      scanMode === 'GPP' 
+                        ? "bg-red-600 text-white shadow-xl shadow-red-600/20" 
+                        : "text-zinc-500 hover:text-zinc-900 hover:bg-white/50"
+                    )}
+                  >
+                    {scanMode === 'GPP' && (
+                      <motion.div layoutId="scanModeBg" className="absolute inset-0 bg-red-600 rounded-xl -z-10" />
+                    )}
+                    <Sparkles className={cn("h-3.5 w-3.5 mb-0.5 transition-colors", scanMode === 'GPP' ? "text-white/60" : "text-zinc-400")} />
+                    <span className="relative">GPP</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="grid gap-4">
             <div className={cn("grid gap-4", scanMode === 'GPP' ? "grid-cols-2" : "grid-cols-1")}>
@@ -753,8 +781,9 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
             <div className="space-y-2">
               <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400 px-1">Ghi chú bổ sung</label>
               <Textarea 
+                ref={textareaRef}
                 placeholder="Nhập ghi chú chi tiết (nếu có)..." 
-                className="rounded-xl focus-visible:ring-zinc-900 min-h-[80px] text-sm border-zinc-200 resize-none shadow-sm"
+                className="rounded-xl focus-visible:ring-zinc-900 min-h-[80px] text-sm border-zinc-200 resize-none shadow-sm overflow-hidden transition-[height] duration-200"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
@@ -767,23 +796,26 @@ export function UploadForm({ defaultPharmacy, userName, onSuccess, availablePhar
           </div>
         </form>
 
-      <div className="pt-4 mt-auto border-t border-zinc-100 bg-white left-0 right-0 z-10 p-2 sm:p-0 sm:pt-4">
+      <div className="pt-4 mt-auto border-t border-zinc-100 bg-white left-0 right-0 z-10 p-2 sm:p-0 sm:pt-4 relative overflow-hidden">
         <Button 
           onClick={(e) => handleSubmit(e as any)}
           type="button"
           disabled={uploading} 
-          className="w-full rounded-xl h-14 font-black text-sm uppercase tracking-widest transition-all shadow-xl active:scale-[0.98] bg-zinc-950 hover:bg-black text-white hover:shadow-2xl"
+          className="w-full rounded-2xl h-15 font-black text-sm uppercase tracking-[0.3em] transition-all shadow-[0_20px_40px_-12px_rgba(0,0,0,0.3)] active:scale-[0.98] bg-zinc-950 hover:bg-black text-white hover:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.4)] group overflow-hidden"
         >
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 translate-x-full group-hover:translate-x-0 transition-transform duration-700 ease-out" />
           {uploading ? (
             <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Đang tải lên...
+              <Loader2 className="mr-3 h-5 w-5 animate-spin text-emerald-400" />
+              ĐANG XỬ LÝ...
             </>
           ) : (
-            <>
-              Hoàn tất & Lưu đơn
-              <ChevronRight className="ml-2 h-5 w-5" />
-            </>
+            <div className="flex items-center justify-center gap-4 relative">
+              <span className="drop-shadow-sm">HOÀN TẤT & LƯU ĐƠN</span>
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                <ChevronRight className="h-5 w-5" />
+              </div>
+            </div>
           )}
         </Button>
       </div>

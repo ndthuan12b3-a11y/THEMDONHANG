@@ -232,7 +232,31 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
           ));
         }
 
+  const handleRotate = (pswp: any) => {
+    const currSlide = pswp.currSlide;
+    if (!currSlide?._ais_rotation) currSlide._ais_rotation = 0;
+    currSlide._ais_rotation = (currSlide._ais_rotation + 90) % 360;
+    
+    const img = currSlide.container.querySelector('img');
+    if (img) {
+      img.style.transition = 'transform 0.3s ease';
+      img.style.transform = `rotate(${currSlide._ais_rotation}deg)`;
+    }
+  };
+
   const handleGalleryOpen = (pswp: any) => {
+    // Add custom buttons to UI
+    pswp.on('uiRegister', () => {
+      pswp.ui.registerElement({
+        name: 'rotate-button',
+        ariaLabel: 'Xoay ảnh',
+        order: 8,
+        isButton: true,
+        html: '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 24 24" width="24" height="24"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 21V15h6l-2.56 2.56A7.75 7.75 0 0 0 12 19a7 7 0 0 0 7-7 7 7 0 0 0-7-7 7.75 7.75 0 0 0-5.56 2.44L4.72 5.72A9.75 9.75 0 0 1 12 3a9 9 0 0 1 9 9z" fill="currentColor"/></svg>',
+        onClick: () => handleRotate(pswp)
+      });
+    });
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!pswp.currSlide) return;
       
@@ -243,6 +267,8 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         pswp.currSlide.zoomTo(currentZoom * 1.3, center, 200);
       } else if (e.key === '-') {
         pswp.currSlide.zoomTo(currentZoom / 1.3, center, 200);
+      } else if (e.key.toLowerCase() === 'r') {
+        handleRotate(pswp);
       }
     };
 
@@ -281,6 +307,14 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
         galleryElement.removeEventListener('wheel', handleWheelEvent);
       }
     });
+
+    // Reset/Persist rotation on slide change
+    pswp.on('change', () => {
+      if (pswp.currSlide && pswp.currSlide._ais_rotation) {
+        const img = pswp.currSlide.container.querySelector('img');
+        if (img) img.style.transform = `rotate(${pswp.currSlide._ais_rotation}deg)`;
+      }
+    });
   };
 
   if (viewMode === 'list') {
@@ -301,7 +335,9 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
             {order.status === 'completed' && (
               <div className="absolute inset-0 z-20 bg-emerald-500/10 flex items-center justify-center pointer-events-none">
-                 <CheckCircle2 className="h-8 w-8 text-emerald-500 bg-white rounded-full p-1 shadow-sm" />
+                 <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-lg border-2 border-emerald-500 rotate-[-12deg] scale-110">
+                   <span className="text-[14px] font-black text-emerald-600 uppercase tracking-tighter leading-none italic">ĐÃ NHẬP</span>
+                 </div>
               </div>
             )}
             {imageUrls.length > 1 && (
@@ -382,12 +418,18 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               size="sm" 
               className={cn(
                 "h-7 sm:h-8 gap-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-tight transition-all px-2 sm:px-3",
-                order.status === 'completed' ? "bg-emerald-500 hover:bg-emerald-600 shadow-sm" : "text-zinc-500 hover:text-zinc-900 border-zinc-200 shadow-none"
+                order.status === 'completed' ? "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-none hover:bg-emerald-100" : "text-zinc-500 hover:text-zinc-900 border-zinc-200 shadow-none"
               )}
               onClick={handleToggleComplete}
             >
-              <CheckCircle2 className={cn("h-3 w-3", order.status === 'completed' ? "text-white" : "text-zinc-400")} />
-              <span>{order.status === 'completed' ? "Xong" : "Xong"}</span>
+              {order.status === 'completed' ? (
+                <span className="italic">ĐÃ NHẬP</span>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-3 w-3 text-zinc-400" />
+                  <span>Xong</span>
+                </>
+              )}
             </Button>
             <Button 
               variant="ghost" 
@@ -557,8 +599,8 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
 
             {order.status === 'completed' && (
               <div className="absolute inset-0 z-20 bg-emerald-500/10 flex items-center justify-center pointer-events-none">
-                <div className="bg-white rounded-full p-2 shadow-xl scale-110">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-2xl border-2 border-emerald-500 rotate-[-12deg] scale-125">
+                  <span className="text-[18px] font-black text-emerald-600 uppercase tracking-tighter leading-none italic">ĐÃ NHẬP</span>
                 </div>
               </div>
             )}
@@ -669,13 +711,19 @@ export const OrderCard = React.memo(React.forwardRef<HTMLDivElement, OrderCardPr
               className={cn(
                 "h-8 gap-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all shadow-sm flex-1",
                 order.status === 'completed' 
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                  ? "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 shadow-none" 
                   : "bg-white border border-zinc-200 text-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
               )}
               onClick={handleToggleComplete}
             >
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{order.status === 'completed' ? "Xong" : "Xong"}</span>
+              {order.status === 'completed' ? (
+                <span className="italic">ĐÃ NHẬP</span>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Xong</span>
+                </>
+              )}
             </Button>
             <Button 
               size="sm" 
